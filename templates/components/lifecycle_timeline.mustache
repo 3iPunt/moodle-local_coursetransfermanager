@@ -1,0 +1,47 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+  @template local_coursetransfermanager/components/lifecycle_timeline
+
+  Lifecycle timeline of a task: the ordered milestones (bring → complete →
+  retention → origin deletion → pruning) with a tone per step. Rendered
+  server-side or client-side (core/templates) with computed dates.
+
+  Context variables:
+  * items - array of {num, title, desc, when, tone: neutral|success|warning|danger}
+
+  Example context (json):
+  {
+    "items": [
+      {"num": 1, "title": "Se dispara la tarea", "desc": "A las 02:00 arranca sola.", "when": "1-sep-2026", "tone": "neutral"}
+    ]
+  }
+}}
+<ol class="ct-timeline">
+    {{#items}}
+    <li class="ct-timeline-item ct-timeline-item--{{ tone }}">
+        <span class="ct-timeline-dot" aria-hidden="true">{{ num }}</span>
+        <span class="ct-timeline-body">
+            <span class="ct-timeline-head">
+                <span class="ct-timeline-title">{{ title }}</span>
+                <span class="ct-badge ct-timeline-when">{{ when }}</span>
+            </span>
+            <span class="ct-timeline-desc">{{ desc }}</span>
+        </span>
+    </li>
+    {{/items}}
+</ol>

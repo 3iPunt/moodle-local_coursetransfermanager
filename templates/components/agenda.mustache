@@ -1,0 +1,91 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+  @template local_coursetransfermanager/components/agenda
+
+  The "coming up" chronological agenda: next executions and pending
+  deletions/prunings in one list, so nothing destructive is invisible.
+  Deletion rows carry a cancel/exclude action wired by the panel AMD.
+
+  Context variables:
+  * agenda.hasitems - bool
+  * agenda.summary  - string ("1 ejecución · 2 borrados pendientes")
+  * agenda.items    - array (see panel_page::export_agenda)
+
+  Example context (json):
+  { "agenda": { "hasitems": false, "summary": "", "items": [] } }
+}}
+<section class="ct-card ct-agenda" data-region="agenda">
+    <button type="button" class="ct-agenda-head" data-action="agenda-toggle" aria-expanded="false">
+        <span class="ct-eyebrow">{{#str}} agenda_title, local_coursetransfermanager {{/str}}</span>
+        <span class="ct-agenda-summary">
+            {{#agenda.hasitems}}{{ agenda.summary }}{{/agenda.hasitems}}
+            {{^agenda.hasitems}}{{#str}} agenda_empty_short, local_coursetransfermanager {{/str}}{{/agenda.hasitems}}
+        </span>
+        <i class="fa fa-chevron-down ct-agenda-chevron" aria-hidden="true"></i>
+    </button>
+    <div class="ct-agenda-body" data-region="agenda-body" hidden>
+        {{^agenda.hasitems}}
+        <p class="ct-text-muted ct-agenda-empty">{{#str}} agenda_empty, local_coursetransfermanager {{/str}}</p>
+        {{/agenda.hasitems}}
+        {{#agenda.items}}
+        <div class="ct-agenda-row {{#isdeletion}}ct-agenda-row--danger{{/isdeletion}}{{#isprune}}ct-agenda-row--warning{{/isprune}}"
+             {{#executionid}}data-executionid="{{ executionid }}"{{/executionid}}
+             {{#pruneid}}data-pruneid="{{ pruneid }}"{{/pruneid}}>
+            <span class="ct-agenda-date" aria-hidden="true">
+                <span class="ct-agenda-day">{{ day }}</span>
+                <span class="ct-agenda-month">{{ month }}</span>
+            </span>
+            <span class="ct-agenda-rail {{#isexecution}}ct-agenda-rail--exec{{/isexecution}}{{#isdeletion}}ct-agenda-rail--danger{{/isdeletion}}{{#isprune}}ct-agenda-rail--warning{{/isprune}}"
+                  aria-hidden="true"></span>
+            <span class="ct-agenda-main">
+                <span class="ct-agenda-meta">
+                    {{#isexecution}}<span class="ct-badge ct-badge--success">{{#str}} agenda_exec_label, local_coursetransfermanager {{/str}}</span>{{/isexecution}}
+                    {{#isdeletion}}<span class="ct-badge ct-badge--pending">{{#str}} agenda_del_label, local_coursetransfermanager {{/str}}</span>{{/isdeletion}}
+                    {{#isprune}}<span class="ct-badge ct-badge--pending">{{#str}} agenda_prune_label, local_coursetransfermanager {{/str}}</span>{{/isprune}}
+                    <span class="ct-agenda-relative" title="{{ datefull }}">{{ relative }}</span>
+                </span>
+                <span class="ct-agenda-title">{{{ title }}}</span>
+                <span class="ct-agenda-detail">{{{ detail }}}</span>
+            </span>
+            <span class="ct-agenda-actions">
+                {{#isexecution}}
+                <a class="ct-agenda-go" href="{{ executionsurl }}?taskid={{ taskid }}"
+                   aria-label="{{#str}} card_viewdetail, local_coursetransfermanager {{/str}}">
+                    <i class="fa fa-chevron-right" aria-hidden="true"></i>
+                </a>
+                {{/isexecution}}
+                {{#isdeletion}}
+                <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="cancel-deletion"
+                        data-executionid="{{ executionid }}" data-category="{{ title }}">
+                    {{#str}} agenda_cancel, local_coursetransfermanager {{/str}}
+                </button>
+                {{/isdeletion}}
+                {{#isprune}}
+                <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="exclude-prune"
+                        data-pruneid="{{ pruneid }}" data-category="{{ title }}">
+                    {{#str}} agenda_exclude, local_coursetransfermanager {{/str}}
+                </button>
+                {{/isprune}}
+            </span>
+        </div>
+        {{/agenda.items}}
+        {{#agenda.hasitems}}
+        <p class="ct-agenda-footer ct-text-muted">{{#str}} agenda_footer, local_coursetransfermanager {{/str}}</p>
+        {{/agenda.hasitems}}
+    </div>
+</section>

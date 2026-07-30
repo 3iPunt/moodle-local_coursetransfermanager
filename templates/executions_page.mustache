@@ -1,0 +1,256 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+  @template local_coursetransfermanager/executions_page
+
+  Tracking screen: what is being brought now, what fires next and what will
+  be deleted — with cancellable deletions and the unified history. Scope is
+  global by default; a task chip narrows it.
+
+  Context variables: see executions_page::export_for_template.
+
+  Example context (json):
+  { "headertitle": "Ejecuciones y borrados", "counts": {"live": 0, "deletions": 0}, "live": [], "history": [] }
+}}
+<div class="local-coursetransfermanager" id="ctm-executions">
+
+    <div class="ct-hero">
+        {{> local_coursetransfermanager/components/page_header }}
+    </div>
+
+    {{#scoped}}
+    <div class="ct-scope">
+        <span class="ct-chip">
+            {{#str}} exec_scope, local_coursetransfermanager, {{ scopename }} {{/str}}
+            <a class="ct-chip-x" href="{{ baseurl }}"
+               aria-label="{{#str}} exec_scope_clear, local_coursetransfermanager {{/str}}">&times;</a>
+        </span>
+    </div>
+    {{/scoped}}
+
+    <div class="ct-tabs" role="tablist" data-region="tabs">
+        <button type="button" class="ct-tab" data-action="tab" data-tab="live" aria-selected="true">
+            {{#str}} exec_tab_live, local_coursetransfermanager {{/str}}
+            {{#counts.live}}<span class="ct-tabcount">{{ counts.live }}</span>{{/counts.live}}
+        </button>
+        <button type="button" class="ct-tab" data-action="tab" data-tab="deletions" aria-selected="false">
+            {{#str}} exec_tab_deletions, local_coursetransfermanager {{/str}}
+            {{#counts.deletions}}<span class="ct-tabcount ct-tabcount--warning">{{ counts.deletions }}</span>{{/counts.deletions}}
+        </button>
+        <button type="button" class="ct-tab" data-action="tab" data-tab="history" aria-selected="false">
+            {{#str}} exec_tab_history, local_coursetransfermanager {{/str}}
+        </button>
+    </div>
+
+    {{! ---- Tab: live ---- }}
+    <section data-region="tab-live">
+        <div class="ct-livehead">
+            <span class="ct-eyebrow">{{#str}} exec_live_title, local_coursetransfermanager {{/str}}</span>
+            <span class="ct-livedot" aria-hidden="true"></span>
+            <span class="ct-text-muted" data-region="refreshed"></span>
+        </div>
+
+        {{^haslive}}
+        <div class="ct-card ct-empty ct-empty--slim">
+            <p class="ct-text-muted">{{#str}} exec_live_empty, local_coursetransfermanager {{/str}}</p>
+        </div>
+        {{/haslive}}
+
+        <div data-region="live-cards">
+        {{#live}}
+        <div class="ct-card ct-livecard" data-executionid="{{ id }}">
+            <div class="ct-livecard-head">
+                <strong>{{{ taskname }}}</strong>
+                <span class="ct-badge ct-badge--success">{{#str}} status_success, local_coursetransfermanager {{/str}}</span>
+                {{#requesturl}}
+                <a class="ct-livecard-link" href="{{ requesturl }}">
+                    {{#str}} exec_fine_detail, local_coursetransfermanager {{/str}}
+                    <i class="fa fa-external-link" aria-hidden="true"></i>
+                </a>
+                {{/requesturl}}
+            </div>
+            <p class="ct-text-muted">{{#str}} exec_live_line, local_coursetransfermanager, {{ categoryname }} {{/str}}
+                · {{#str}} exec_live_since, local_coursetransfermanager, {{ since }} {{/str}}</p>
+            <div class="ct-stepper" aria-hidden="true">
+                <span class="ct-stepper-item ct-stepper-item--done">
+                    <i class="fa fa-check" aria-hidden="true"></i> {{#str}} exec_phase_launched, local_coursetransfermanager {{/str}}
+                </span>
+                <span class="ct-stepper-sep"></span>
+                <span class="ct-stepper-item ct-stepper-item--active">
+                    {{#str}} exec_phase_restoring, local_coursetransfermanager {{/str}}
+                </span>
+                <span class="ct-stepper-sep"></span>
+                <span class="ct-stepper-item">{{#str}} exec_phase_completed, local_coursetransfermanager {{/str}}</span>
+            </div>
+            {{#stalled}}
+            <div class="ct-banner ct-banner--warning">
+                <i class="fa fa-clock-o" aria-hidden="true"></i>
+                <span>{{#str}} exec_stalled, local_coursetransfermanager {{/str}}
+                    <a href="{{ panel }}">{{#str}} exec_stalled_checks, local_coursetransfermanager {{/str}}</a></span>
+            </div>
+            {{/stalled}}
+        </div>
+        {{/live}}
+        </div>
+
+        <div class="ct-livehead">
+            <span class="ct-eyebrow">{{#str}} exec_upcoming_title, local_coursetransfermanager {{/str}}</span>
+        </div>
+        {{^hasupcoming}}
+        <p class="ct-text-muted">{{#str}} exec_upcoming_empty, local_coursetransfermanager {{/str}}</p>
+        {{/hasupcoming}}
+        {{#upcoming}}
+        <div class="ct-agenda-row">
+            <span class="ct-agenda-date" aria-hidden="true">
+                <span class="ct-agenda-day">{{ day }}</span>
+                <span class="ct-agenda-month">{{ month }}</span>
+            </span>
+            <span class="ct-agenda-rail ct-agenda-rail--exec" aria-hidden="true"></span>
+            <span class="ct-agenda-main">
+                <span class="ct-agenda-title">{{{ taskname }}}</span>
+                <span class="ct-agenda-detail">{{#str}} exec_upcoming_line, local_coursetransfermanager, {{ resolvedpattern }} {{/str}}</span>
+            </span>
+            <span class="ct-agenda-relative" title="{{ datefull }}">{{ relative }}</span>
+        </div>
+        {{/upcoming}}
+    </section>
+
+    {{! ---- Tab: pending deletions ---- }}
+    <section data-region="tab-deletions" hidden>
+        <p class="ct-text-muted">{{#str}} exec_deletions_intro, local_coursetransfermanager {{/str}}</p>
+        {{^hasdeletions}}
+        <div class="ct-card ct-empty ct-empty--slim">
+            <p class="ct-text-muted">{{#str}} exec_deletions_empty, local_coursetransfermanager {{/str}}</p>
+        </div>
+        {{/hasdeletions}}
+        {{#deletions}}
+        {{> local_coursetransfermanager/components/deletion_card }}
+        {{/deletions}}
+    </section>
+
+    {{! ---- Tab: history ---- }}
+    <section data-region="tab-history" hidden>
+        <form class="ct-card ct-filters" method="get" action="{{ baseurl }}">
+            <input type="hidden" name="tab" value="history">
+            <div class="ct-field">
+                <label class="ct-field-label" for="ctm-htask">{{#str}} exec_filter_task, local_coursetransfermanager {{/str}}</label>
+                <select class="ct-input" id="ctm-htask" name="taskid">
+                    <option value="0">{{#str}} all {{/str}}</option>
+                    {{#filters.taskoptions}}
+                    <option value="{{ id }}" {{#selected}}selected{{/selected}}>{{ name }}</option>
+                    {{/filters.taskoptions}}
+                </select>
+            </div>
+            <div class="ct-field">
+                <label class="ct-field-label" for="ctm-hstatus">{{#str}} status, local_coursetransfermanager {{/str}}</label>
+                <select class="ct-input" id="ctm-hstatus" name="status">
+                    {{#filters.statusoptions}}
+                    <option value="{{ value }}" {{#selected}}selected{{/selected}}>{{ label }}</option>
+                    {{/filters.statusoptions}}
+                </select>
+            </div>
+            <div class="ct-field">
+                <label class="ct-field-label" for="ctm-hfrom">{{#str}} fromdate, local_coursetransfermanager {{/str}}</label>
+                <input class="ct-input" type="date" id="ctm-hfrom" name="fromdate" value="{{ filters.fromdate }}">
+            </div>
+            <div class="ct-field">
+                <label class="ct-field-label" for="ctm-hto">{{#str}} todate, local_coursetransfermanager {{/str}}</label>
+                <input class="ct-input" type="date" id="ctm-hto" name="todate" value="{{ filters.todate }}">
+            </div>
+            <div class="ct-filters-actions">
+                <button type="submit" class="ct-btn ct-btn--secondary ct-btn--sm">{{#str}} filters_apply, local_coursetransfermanager {{/str}}</button>
+                <a class="ct-btn ct-btn--ghost ct-btn--sm" href="{{ baseurl }}?tab=history">{{#str}} filters_clear, local_coursetransfermanager {{/str}}</a>
+            </div>
+        </form>
+
+        {{^hashistory}}
+        <div class="ct-card ct-empty ct-empty--slim">
+            <p class="ct-text-muted">{{#str}} exec_history_empty, local_coursetransfermanager {{/str}}</p>
+        </div>
+        {{/hashistory}}
+
+        {{#hashistory}}
+        <div class="ct-card ct-histwrap">
+            <div class="ct-hist ct-hist--head" aria-hidden="true">
+                <span>{{#str}} exec_col_date, local_coursetransfermanager {{/str}}</span>
+                <span>{{#str}} exec_col_what, local_coursetransfermanager {{/str}}</span>
+                <span>{{#str}} exec_col_type, local_coursetransfermanager {{/str}}</span>
+                <span>{{#str}} status, local_coursetransfermanager {{/str}}</span>
+                <span>{{#str}} exec_col_request, local_coursetransfermanager {{/str}}</span>
+                <span></span>
+            </div>
+            {{#history}}
+            <div class="ct-hist" data-region="hist-row">
+                <span class="ct-hist-date">{{ date }}</span>
+                <span class="ct-hist-what">
+                    <strong>{{{ taskname }}}</strong>
+                    <small>{{{ categoryname }}}</small>
+                </span>
+                <span class="ct-hist-type">
+                    {{#isrestore}}{{#str}} exec_type_restore, local_coursetransfermanager {{/str}}{{/isrestore}}
+                    {{#isprune}}{{#str}} exec_type_prune, local_coursetransfermanager {{/str}}{{/isprune}}
+                </span>
+                <span><span class="ct-badge {{ badge }}">{{ statuslabel }}</span></span>
+                <span>
+                    {{#requesturl}}
+                    <a href="{{ requesturl }}">#{{ requestid }} <i class="fa fa-external-link" aria-hidden="true"></i></a>
+                    {{/requesturl}}
+                    {{^requesturl}}-{{/requesturl}}
+                </span>
+                <span>
+                    {{#error}}
+                    <button type="button" class="ct-kebab-btn" data-action="toggle-error"
+                            aria-expanded="false" aria-label="{{#str}} exec_view_error, local_coursetransfermanager {{/str}}">
+                        <i class="fa fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    {{/error}}
+                </span>
+                {{#error}}
+                <div class="ct-hist-error" data-region="hist-error" hidden>
+                    <strong>{{#str}} exec_error_title, local_coursetransfermanager {{/str}}</strong>
+                    <p>{{{ error }}}</p>
+                    {{#requesturl}}<a href="{{ requesturl }}">{{#str}} exec_fine_detail, local_coursetransfermanager {{/str}}</a>{{/requesturl}}
+                </div>
+                {{/error}}
+            </div>
+            {{/history}}
+        </div>
+
+        <div class="ct-paging">
+            <span class="ct-text-muted">{{ paging.showing }}</span>
+            <div class="ct-paging-btns">
+                {{#paging.hasprev}}
+                <a class="ct-btn ct-btn--secondary ct-btn--sm" data-page="{{ paging.prevpage }}" data-action="page" href="#">
+                    {{#str}} exec_prev, local_coursetransfermanager {{/str}}</a>
+                {{/paging.hasprev}}
+                {{#paging.hasnext}}
+                <a class="ct-btn ct-btn--secondary ct-btn--sm" data-page="{{ paging.nextpage }}" data-action="page" href="#">
+                    {{#str}} exec_next, local_coursetransfermanager {{/str}}</a>
+                {{/paging.hasnext}}
+            </div>
+        </div>
+        {{/hashistory}}
+    </section>
+
+    {{> local_coursetransfermanager/components/page_nav }}
+</div>
+
+{{#js}}
+require(['local_coursetransfermanager/executions'], function(Executions) {
+    Executions.init('ctm-executions');
+});
+{{/js}}

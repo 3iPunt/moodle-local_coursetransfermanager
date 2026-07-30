@@ -1,0 +1,348 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+  @template local_coursetransfermanager/task_wizard_page
+
+  Task wizard: one clean column, five steps (origin → destination →
+  schedule → retentions & notices → review), everything verified live and
+  the destructive consequences explicit before saving. The AMD module
+  drives navigation, live checks and the save.
+
+  Context variables: see task_wizard_page::export_for_template
+  (isedit, headertitle, headerdesc, sites, configjson, panel...).
+
+  Example context (json):
+  { "isedit": false, "headertitle": "Nueva tarea de archivo anual", "sites": [], "configjson": "{}" }
+}}
+<div class="local-coursetransfermanager ct-wizard" id="ctm-wizard">
+
+    <div class="ct-hero">
+        {{> local_coursetransfermanager/components/page_header }}
+    </div>
+
+    <div class="ct-steps" data-region="steps" role="tablist">
+        <button type="button" class="ct-step" data-action="go-step" data-step="1" aria-current="step">
+            <span class="ct-step-num">1</span>
+            <span class="ct-step-text"><strong>{{#str}} wz_step1, local_coursetransfermanager {{/str}}</strong>
+            <small>{{#str}} wz_step1_hint, local_coursetransfermanager {{/str}}</small></span>
+        </button>
+        <button type="button" class="ct-step" data-action="go-step" data-step="2">
+            <span class="ct-step-num">2</span>
+            <span class="ct-step-text"><strong>{{#str}} wz_step2, local_coursetransfermanager {{/str}}</strong>
+            <small>{{#str}} wz_step2_hint, local_coursetransfermanager {{/str}}</small></span>
+        </button>
+        <button type="button" class="ct-step" data-action="go-step" data-step="3">
+            <span class="ct-step-num">3</span>
+            <span class="ct-step-text"><strong>{{#str}} wz_step3, local_coursetransfermanager {{/str}}</strong>
+            <small>{{#str}} wz_step3_hint, local_coursetransfermanager {{/str}}</small></span>
+        </button>
+        <button type="button" class="ct-step" data-action="go-step" data-step="4">
+            <span class="ct-step-num">4</span>
+            <span class="ct-step-text"><strong>{{#str}} wz_step4, local_coursetransfermanager {{/str}}</strong>
+            <small>{{#str}} wz_step4_hint, local_coursetransfermanager {{/str}}</small></span>
+        </button>
+        <button type="button" class="ct-step" data-action="go-step" data-step="5">
+            <span class="ct-step-num">5</span>
+            <span class="ct-step-text"><strong>{{#str}} wz_step5, local_coursetransfermanager {{/str}}</strong>
+            <small>{{#str}} wz_step5_hint, local_coursetransfermanager {{/str}}</small></span>
+        </button>
+    </div>
+
+    <main class="ct-card ct-wizard-card" data-region="wizard-card">
+
+        {{! ---- Step 1: origin ---- }}
+        <section data-region="step-1">
+            <h2 class="ct-section-title">{{#str}} wz_s1_title, local_coursetransfermanager {{/str}}</h2>
+            <p class="ct-text-muted">{{#str}} wz_s1_desc, local_coursetransfermanager {{/str}}</p>
+
+            <div class="ct-field">
+                <label class="ct-field-label" for="ctm-name">{{#str}} taskname, local_coursetransfermanager {{/str}}</label>
+                <input class="ct-input" type="text" id="ctm-name" data-field="name"
+                       placeholder="{{#str}} wz_name_placeholder, local_coursetransfermanager {{/str}}">
+                <p class="ct-field-help">{{#str}} wz_name_help, local_coursetransfermanager {{/str}}</p>
+            </div>
+
+            <div class="ct-field">
+                <label class="ct-field-label" for="ctm-site">{{#str}} originsite, local_coursetransfermanager {{/str}}</label>
+                <select class="ct-input" id="ctm-site" data-field="originsiteid">
+                    <option value="0">{{#str}} choosedots {{/str}}</option>
+                    {{#sites}}
+                    <option value="{{ id }}" data-host="{{ host }}" data-testok="{{#testok}}1{{/testok}}{{^testok}}0{{/testok}}"
+                            data-testko="{{#testko}}1{{/testko}}{{^testko}}0{{/testko}}"
+                            data-testrelative="{{ testrelative }}" {{#selected}}selected{{/selected}}>
+                        {{ name }} — {{ host }}
+                    </option>
+                    {{/sites}}
+                </select>
+            </div>
+
+            <div class="ct-sitecard" data-region="sitecard" hidden>
+                <i class="fa fa-globe ct-sitecard-icon" aria-hidden="true"></i>
+                <span class="ct-sitecard-body">
+                    <span class="ct-sitecard-host" data-region="sitecard-host"></span>
+                    <span class="ct-sitecard-test ct-text-muted" data-region="sitecard-test"></span>
+                </span>
+                <span data-region="sitecard-badge"></span>
+                <a class="ct-sitecard-link" href="{{ coursetransfersites }}">
+                    {{#str}} wz_manage_sites, local_coursetransfermanager {{/str}}
+                    <i class="fa fa-external-link" aria-hidden="true"></i>
+                </a>
+            </div>
+
+            <div class="ct-field">
+                <label class="ct-field-label" for="ctm-pattern">{{#str}} categorypattern, local_coursetransfermanager {{/str}}</label>
+                <input class="ct-input" type="text" id="ctm-pattern" data-field="categorypattern">
+                <p class="ct-field-help" data-region="pattern-help"></p>
+                <div class="ct-chipbar">
+                    <span class="ct-text-muted">{{#str}} wz_insert, local_coursetransfermanager {{/str}}</span>
+                    <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="insert-token"
+                            data-token="{YEAR}" data-region="token-year"></button>
+                    <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="insert-token"
+                            data-token="{PREVYEAR}" data-region="token-prevyear"></button>
+                </div>
+            </div>
+
+            <button type="button" class="ct-btn ct-btn--secondary" data-action="test-pattern">
+                <i class="fa fa-search" aria-hidden="true"></i>
+                {{#str}} wz_test_pattern, local_coursetransfermanager {{/str}}
+            </button>
+            <div data-region="pattern-result" role="status" aria-live="polite"></div>
+        </section>
+
+        {{! ---- Step 2: destination ---- }}
+        <section data-region="step-2" hidden>
+            <h2 class="ct-section-title">{{#str}} wz_s2_title, local_coursetransfermanager {{/str}}</h2>
+            <p class="ct-text-muted">{{#str}} wz_s2_desc, local_coursetransfermanager {{/str}}</p>
+
+            <div class="ct-field ct-ac" data-region="category-ac">
+                <label class="ct-field-label" for="ctm-dest">{{#str}} targetcategory, local_coursetransfermanager {{/str}}</label>
+                <div class="ct-ac-box">
+                    <i class="fa fa-search ct-ac-icon" aria-hidden="true"></i>
+                    <input class="ct-input ct-ac-input" type="text" id="ctm-dest" autocomplete="off"
+                           placeholder="{{#str}} wz_dest_placeholder, local_coursetransfermanager {{/str}}">
+                    <button type="button" class="ct-ac-clear" data-action="dest-clear" hidden
+                            aria-label="{{#str}} wz_clear_selection, local_coursetransfermanager {{/str}}">
+                        <i class="fa fa-times" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div class="ct-ac-drop" data-region="category-drop" hidden></div>
+                <p class="ct-field-help">{{#str}} wz_dest_help, local_coursetransfermanager {{/str}}</p>
+            </div>
+
+            <div class="ct-preview" data-region="dest-preview" hidden>
+                <span class="ct-eyebrow">{{#str}} wz_dest_preview, local_coursetransfermanager {{/str}}</span>
+                <span data-region="dest-preview-body"></span>
+            </div>
+
+            <div class="ct-field">
+                <span class="ct-field-label">{{#str}} wz_copy_what, local_coursetransfermanager {{/str}}</span>
+                <div class="ct-optgrid">
+                    <button type="button" class="ct-opt" data-action="set-userdata" data-value="1">
+                        <i class="fa fa-users" aria-hidden="true"></i>
+                        <strong>{{#str}} wz_copy_users, local_coursetransfermanager {{/str}}</strong>
+                        <small>{{#str}} wz_copy_users_desc, local_coursetransfermanager {{/str}}</small>
+                    </button>
+                    <button type="button" class="ct-opt" data-action="set-userdata" data-value="0">
+                        <i class="fa fa-book" aria-hidden="true"></i>
+                        <strong>{{#str}} wz_copy_courses, local_coursetransfermanager {{/str}}</strong>
+                        <small>{{#str}} wz_copy_courses_desc, local_coursetransfermanager {{/str}}</small>
+                    </button>
+                </div>
+                <div class="ct-banner ct-banner--info" data-region="userdata-note" hidden>
+                    <i class="fa fa-info-circle" aria-hidden="true"></i>
+                    <span>{{#str}} wz_copy_users_note, local_coursetransfermanager {{/str}}</span>
+                </div>
+            </div>
+        </section>
+
+        {{! ---- Step 3: schedule ---- }}
+        <section data-region="step-3" hidden>
+            <h2 class="ct-section-title">{{#str}} wz_s3_title, local_coursetransfermanager {{/str}}</h2>
+            <p class="ct-text-muted">{{#str}} wz_s3_desc, local_coursetransfermanager {{/str}}</p>
+
+            <div class="ct-tabs" role="tablist">
+                <button type="button" class="ct-tab" data-action="sched-mode" data-mode="semantic" aria-selected="true">
+                    {{#str}} wz_sched_semantic, local_coursetransfermanager {{/str}}
+                </button>
+                <button type="button" class="ct-tab" data-action="sched-mode" data-mode="cron" aria-selected="false">
+                    {{#str}} wz_sched_cron, local_coursetransfermanager {{/str}}
+                </button>
+            </div>
+
+            <div data-region="sched-semantic">
+                <div class="ct-sentence">
+                    <span>{{#str}} wz_once_a_year, local_coursetransfermanager {{/str}}</span>
+                    <select class="ct-input ct-input--inline" id="ctm-day" data-field="day"
+                            aria-label="{{#str}} wz_day, local_coursetransfermanager {{/str}}"></select>
+                    <span>{{#str}} wz_of, local_coursetransfermanager {{/str}}</span>
+                    <select class="ct-input ct-input--inline" id="ctm-month" data-field="month"
+                            aria-label="{{#str}} wz_month, local_coursetransfermanager {{/str}}"></select>
+                    <span>{{#str}} wz_at, local_coursetransfermanager {{/str}}</span>
+                    <select class="ct-input ct-input--inline" id="ctm-hour" data-field="hour"
+                            aria-label="{{#str}} wz_hour, local_coursetransfermanager {{/str}}"></select>
+                </div>
+                <p class="ct-field-help">{{#str}} wz_server_time, local_coursetransfermanager {{/str}}</p>
+            </div>
+
+            <div data-region="sched-cron" hidden>
+                <div class="ct-field">
+                    <label class="ct-field-label" for="ctm-cron">{{#str}} cronexpression, local_coursetransfermanager {{/str}}</label>
+                    <input class="ct-input" type="text" id="ctm-cron" data-field="cronexpression">
+                    <p class="ct-field-help">{{#str}} wz_cron_help, local_coursetransfermanager {{/str}}</p>
+                </div>
+            </div>
+
+            <div class="ct-preview" data-region="sched-preview" hidden>
+                <span class="ct-eyebrow">{{#str}} wz_next_runs, local_coursetransfermanager {{/str}}</span>
+                <div data-region="sched-preview-body"></div>
+            </div>
+            <div class="ct-banner ct-banner--warning" data-region="summer-warning" hidden>
+                <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+                <span>{{#str}} wz_summer_warning, local_coursetransfermanager {{/str}}</span>
+            </div>
+        </section>
+
+        {{! ---- Step 4: retentions & notices ---- }}
+        <section data-region="step-4" hidden>
+            <div class="ct-warnhead">
+                <span class="ct-eyebrow ct-warnhead-eyebrow">{{#str}} wz_s4_eyebrow, local_coursetransfermanager {{/str}}</span>
+                <h2 class="ct-section-title">{{#str}} wz_s4_title, local_coursetransfermanager {{/str}}</h2>
+                <p class="ct-text-muted">{{#str}} wz_s4_desc, local_coursetransfermanager {{/str}}</p>
+            </div>
+
+            <fieldset class="ct-retention ct-retention--origin">
+                <legend class="ct-retention-title">{{#str}} wz_ret_origin, local_coursetransfermanager {{/str}}</legend>
+                <p class="ct-text-muted" data-region="ret-origin-desc"></p>
+                <div class="ct-field">
+                    <label class="ct-field-label" for="ctm-retention">{{#str}} retentiondays, local_coursetransfermanager {{/str}}</label>
+                    <div class="ct-field-row">
+                        <input class="ct-input ct-input--num" type="number" id="ctm-retention" min="1" max="365"
+                               data-field="retentiondays">
+                        <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="preset-retention" data-days="15">15</button>
+                        <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="preset-retention" data-days="30">30</button>
+                        <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="preset-retention" data-days="60">60</button>
+                        <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="preset-retention" data-days="90">90</button>
+                    </div>
+                </div>
+                <div class="ct-preview" data-region="ret-origin-box"></div>
+                <div class="ct-banner ct-banner--danger" data-region="ret-short" hidden>
+                    <i class="fa fa-exclamation-circle" aria-hidden="true"></i>
+                    <span>{{#str}} wz_ret_short, local_coursetransfermanager {{/str}}</span>
+                </div>
+            </fieldset>
+
+            <fieldset class="ct-retention">
+                <legend class="ct-retention-title">{{#str}} wz_ret_archive, local_coursetransfermanager {{/str}}</legend>
+                <p class="ct-text-muted">{{#str}} wz_ret_archive_desc, local_coursetransfermanager {{/str}}</p>
+                <div class="ct-field">
+                    <label class="ct-field-label" for="ctm-keepyears">{{#str}} destinationkeepyears, local_coursetransfermanager {{/str}}</label>
+                    <input class="ct-input ct-input--num" type="number" id="ctm-keepyears" min="1" max="20"
+                           data-field="destinationkeepyears">
+                </div>
+                <div class="ct-preview" data-region="ret-archive-box"></div>
+            </fieldset>
+
+            <fieldset class="ct-retention">
+                <legend class="ct-retention-title">{{#str}} wz_notices, local_coursetransfermanager {{/str}}</legend>
+                <p class="ct-text-muted">{{#str}} wz_notices_desc, local_coursetransfermanager {{/str}}</p>
+
+                <div class="ct-field ct-ac" data-region="user-ac">
+                    <span class="ct-field-label">{{#str}} wz_recipients, local_coursetransfermanager {{/str}}</span>
+                    <div class="ct-chips" data-region="recipient-chips"></div>
+                    <div class="ct-ac-box">
+                        <i class="fa fa-search ct-ac-icon" aria-hidden="true"></i>
+                        <input class="ct-input ct-ac-input" type="text" id="ctm-recipients" autocomplete="off"
+                               placeholder="{{#str}} wz_recipients_placeholder, local_coursetransfermanager {{/str}}">
+                    </div>
+                    <div class="ct-ac-drop" data-region="user-drop" hidden></div>
+                </div>
+
+                <div class="ct-field">
+                    <span class="ct-field-label">{{#str}} wz_level, local_coursetransfermanager {{/str}}</span>
+                    <div class="ct-optgrid">
+                        <button type="button" class="ct-opt" data-action="set-level" data-value="full">
+                            <i class="fa fa-bell" aria-hidden="true"></i>
+                            <strong>{{#str}} wz_level_full, local_coursetransfermanager {{/str}}</strong>
+                            <small>{{#str}} wz_level_full_desc, local_coursetransfermanager {{/str}}</small>
+                        </button>
+                        <button type="button" class="ct-opt" data-action="set-level" data-value="essential">
+                            <i class="fa fa-bell-o" aria-hidden="true"></i>
+                            <strong>{{#str}} wz_level_essential, local_coursetransfermanager {{/str}}</strong>
+                            <small>{{#str}} wz_level_essential_desc, local_coursetransfermanager {{/str}}</small>
+                        </button>
+                    </div>
+                    <div class="ct-banner ct-banner--info">
+                        <i class="fa fa-info-circle" aria-hidden="true"></i>
+                        <span>{{#str}} wz_level_note, local_coursetransfermanager {{/str}}</span>
+                    </div>
+                </div>
+            </fieldset>
+        </section>
+
+        {{! ---- Step 5: review ---- }}
+        <section data-region="step-5" hidden>
+            <h2 class="ct-section-title">{{#str}} wz_s5_title, local_coursetransfermanager {{/str}}</h2>
+            <p class="ct-text-muted">{{#str}} wz_s5_desc, local_coursetransfermanager {{/str}}</p>
+
+            <div class="ct-revgrid" data-region="review-cards"></div>
+
+            <span class="ct-eyebrow">{{#str}} wz_timeline, local_coursetransfermanager {{/str}}</span>
+            <div data-region="timeline"></div>
+
+            <div class="ct-confirm" data-region="confirm-block">
+                <strong>{{#str}} wz_confirm_title, local_coursetransfermanager {{/str}}</strong>
+                <p data-region="confirm-summary"></p>
+                <label class="ct-confirm-check">
+                    <input type="checkbox" id="ctm-confirm" data-field="confirm">
+                    <span>{{#str}} wz_confirm_check, local_coursetransfermanager {{/str}}</span>
+                </label>
+            </div>
+        </section>
+
+        {{! ---- Success ---- }}
+        <section data-region="step-done" hidden>
+            <div class="ct-done">
+                <span class="ct-done-icon"><i class="fa fa-check" aria-hidden="true"></i></span>
+                <h2>{{#str}} wz_done_title, local_coursetransfermanager {{/str}}</h2>
+                <p class="ct-text-muted" data-region="done-desc"></p>
+                <a class="ct-btn ct-btn--primary" href="{{ panelurl }}">{{#str}} wz_done_back, local_coursetransfermanager {{/str}}</a>
+            </div>
+        </section>
+
+        <div class="ct-wizard-actions" data-region="wizard-actions">
+            <a class="ct-btn ct-btn--ghost" href="{{ panelurl }}">{{#str}} cancel {{/str}}</a>
+            <div class="ct-wizard-actions-right">
+                <button type="button" class="ct-btn ct-btn--secondary" data-action="step-back" hidden>
+                    {{#str}} wz_back, local_coursetransfermanager {{/str}}
+                </button>
+                <button type="button" class="ct-btn ct-btn--primary" data-action="step-next">
+                    {{#str}} wz_continue, local_coursetransfermanager {{/str}}
+                </button>
+                <button type="button" class="ct-btn ct-btn--primary" data-action="save" hidden disabled>
+                    {{#isedit}}{{#str}} wz_save_edit, local_coursetransfermanager {{/str}}{{/isedit}}
+                    {{^isedit}}{{#str}} wz_save_new, local_coursetransfermanager {{/str}}{{/isedit}}
+                </button>
+            </div>
+        </div>
+    </main>
+</div>
+
+{{#js}}
+require(['local_coursetransfermanager/task_wizard'], function(Wizard) {
+    Wizard.init('ctm-wizard', {{{ configjson }}});
+});
+{{/js}}

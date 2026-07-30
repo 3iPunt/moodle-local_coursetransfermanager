@@ -1,0 +1,1748 @@
+/* Local Course Transfer Manager - plugin styles. */
+
+/*
+ * ============================================================
+ * Course Transfer family design system (Tresipunt / Claude Design).
+ * Same tokens and base components as local_coursetransfer, scoped
+ * under .local-coursetransfermanager so nothing leaks outside the
+ * plugin's content region. The page shell stays with the theme
+ * (Boost, BS4/BS5); fonts fall back to the theme/system stack.
+ * Source of truth: .tresipunt docs, design/claude-design/.
+ * ============================================================
+ */
+
+.local-coursetransfermanager {
+    /* Responsive by CONTAINER width (not viewport): the plugin content often sits
+       in a narrow column (theme blocks/drawers), so layout must react to its own
+       width. See the @container blocks below. */
+    container: ctm / inline-size;
+    /* Brand (family logo colours: magenta #ea1a7f primary, amber #ffa827 secondary) */
+    --magenta-50: #fdeaf3;
+    --magenta-100: #f9cbe1;
+    --magenta-200: #f293c0;
+    --magenta-500: #ea1a7f;
+    --magenta-600: #c9156c;
+    --magenta-700: #a3115a;
+    --magenta-border: #f1d0de;
+    --amber-50: #fff4e0;
+    --amber-500: #ffa827;
+    --amber-600: #e08d10;
+    --amber-700: #b96f08;
+    --amber-800: #8a5205;
+    /* Neutrals */
+    --neutral-0: #fff;
+    --neutral-25: #fafafa;
+    --neutral-50: #f4f4f5;
+    --neutral-100: #ececed;
+    --neutral-200: #dddddf;
+    --neutral-300: #c6c6c9;
+    --neutral-400: #9a9a9e;
+    --neutral-500: #6f6f73;
+    --neutral-700: #424244;
+    --neutral-800: #333;
+    --neutral-900: #1e1e1f;
+    /* Status */
+    --success-500: #1f9d57;
+    --success-50: #e7f6ee;
+    --warning-500: #e8a317;
+    --warning-700: #9a6b08;
+    --warning-50: #fcf3df;
+    --danger-500: #cd1405;
+    --danger-50: #ffe3e0;
+    --info-500: #2d7ff9;
+    --info-50: #e8f1fe;
+    /* Semantic aliases */
+    --color-primary: var(--magenta-500);
+    --color-primary-hover: var(--magenta-600);
+    --color-primary-press: var(--magenta-700);
+    --color-secondary: var(--amber-500);
+    --text-strong: var(--neutral-900);
+    --text-body: var(--neutral-800);
+    --text-muted: var(--neutral-500);
+    --text-subtle: var(--neutral-400);
+    --text-link: var(--magenta-600);
+    --surface-alt: var(--neutral-25);
+    --surface-sunken: var(--neutral-50);
+    --border-default: var(--neutral-200);
+    --border-strong: var(--neutral-300);
+    --border-subtle: var(--neutral-100);
+    --divider: var(--neutral-100);
+    --focus-ring: rgba(248, 64, 21, 0.45);
+    /* Type: the theme owns typography (family decision, TIPGOODLE-352 Q4). Both
+       tokens resolve to `inherit` so every ct-* component uses the theme
+       font; a theme shipping brand fonts (e.g. Fresk) cascades in alone. */
+    --font-heading: inherit;
+    --font-body: inherit;
+    /* Radii, elevation, motion */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-pill: 999px;
+    --shadow-sm: 0 2px 6px rgba(30, 30, 31, 0.07);
+    --shadow-md: 0 6px 18px rgba(30, 30, 31, 0.08);
+    --shadow-brand: 0 8px 24px rgba(248, 64, 21, 0.28);
+    --dur-fast: 120ms;
+    --dur-base: 200ms;
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+    color: var(--text-body);
+    /* No own width/margin: the content fills the theme's already-centered
+       content container, so the page heading and this content share the
+       same box and line up (family decision, TIPGOODLE-353). */
+}
+
+/* ---- Typography helpers ---- */
+.local-coursetransfermanager .ct-section-title {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 19px;
+    color: var(--text-strong);
+}
+
+.local-coursetransfermanager .ct-text-muted {
+    color: var(--text-muted);
+}
+
+/* ---- Card ---- */
+.local-coursetransfermanager .ct-card {
+    background: var(--neutral-0);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding: 26px 28px;
+}
+
+/* ---- Status badge (execution + deletion lifecycle) ---- */
+.local-coursetransfermanager .ct-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: var(--radius-pill);
+    padding: 4px 11px;
+    white-space: nowrap;
+}
+
+.local-coursetransfermanager .ct-badge::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: var(--radius-pill);
+    background: currentColor;
+    flex: none;
+}
+
+/* Execution: launched ("success" = restoring in the background). */
+.local-coursetransfermanager .ct-badge--success {
+    background: var(--info-50);
+    color: var(--info-500);
+}
+
+/* Execution: completed for real. */
+.local-coursetransfermanager .ct-badge--completed {
+    background: var(--success-50);
+    color: var(--success-500);
+}
+
+/* Execution: error. */
+.local-coursetransfermanager .ct-badge--error {
+    background: var(--danger-50);
+    color: var(--danger-500);
+}
+
+/* Deletion lifecycle: pending (scheduled or warned). */
+.local-coursetransfermanager .ct-badge--pending {
+    background: var(--warning-50);
+    color: var(--warning-700);
+}
+
+/* Deletion lifecycle: cancelled by an admin. */
+.local-coursetransfermanager .ct-badge--cancelled {
+    background: var(--neutral-100);
+    color: var(--neutral-700);
+}
+
+/* Deletion lifecycle: executed (category gone from the origin / archive). */
+.local-coursetransfermanager .ct-badge--deleted {
+    background: var(--neutral-100);
+    color: var(--neutral-500);
+}
+
+/* Task state: inactive. */
+.local-coursetransfermanager .ct-badge--inactive {
+    background: var(--neutral-100);
+    color: var(--neutral-500);
+}
+
+/* ---- Buttons ---- */
+.local-coursetransfermanager .ct-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 44px;
+    padding: 0 22px;
+    border-radius: var(--radius-sm);
+    border: 0;
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color var(--dur-fast) var(--ease-standard),
+        box-shadow var(--dur-base) var(--ease-standard),
+        transform var(--dur-fast) var(--ease-standard);
+}
+
+.local-coursetransfermanager .ct-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.local-coursetransfermanager .ct-btn:active {
+    transform: translateY(1px);
+}
+
+.local-coursetransfermanager .ct-btn--primary {
+    background: var(--color-primary);
+    color: var(--neutral-0);
+}
+
+.local-coursetransfermanager .ct-btn--primary:hover {
+    background: var(--color-primary-hover);
+    color: var(--neutral-0);
+    box-shadow: var(--shadow-brand);
+}
+
+.local-coursetransfermanager .ct-btn--secondary {
+    background: var(--neutral-0);
+    border: 1.5px solid var(--border-default);
+    color: var(--text-body);
+    padding: 0 20px;
+}
+
+.local-coursetransfermanager .ct-btn--secondary:hover {
+    border-color: var(--border-strong);
+    color: var(--text-strong);
+}
+
+.local-coursetransfermanager .ct-btn--ghost {
+    background: transparent;
+    color: var(--text-muted);
+    padding: 0 18px;
+}
+
+.local-coursetransfermanager .ct-btn--ghost:hover {
+    color: var(--text-body);
+    background: var(--surface-sunken);
+}
+
+.local-coursetransfermanager .ct-btn--danger {
+    background: var(--danger-500);
+    color: var(--neutral-0);
+}
+
+.local-coursetransfermanager .ct-btn--danger:hover {
+    background: #c73224;
+    color: var(--neutral-0);
+}
+
+.local-coursetransfermanager .ct-btn:disabled,
+.local-coursetransfermanager .ct-btn--disabled {
+    background: var(--neutral-300);
+    color: var(--neutral-0);
+    border-color: transparent;
+    opacity: 0.7;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.local-coursetransfermanager .ct-btn--sm {
+    height: 38px;
+    padding: 0 16px;
+    font-size: 13.5px;
+}
+
+.local-coursetransfermanager .ct-btn .fa {
+    font-size: 14px;
+}
+
+/* ---- Page hero (shared header: icon chip + title + description) ---- */
+.local-coursetransfermanager .ct-hero {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    /* Breathing room from the Moodle navbar/secondary nav above. */
+    margin-top: 24px;
+    margin-bottom: 24px;
+}
+
+.local-coursetransfermanager .ct-hero-side {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.local-coursetransfermanager .ct-hero-main {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex: 1;
+    min-width: 0;
+}
+
+.local-coursetransfermanager .ct-page-icon {
+    width: 70px;
+    height: 70px;
+    border-radius: 15px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    filter: drop-shadow(0 0 15px rgba(0, 0, 0, 0.10));
+    background: linear-gradient(138deg, #fff9e4 11.83%, #ffebed 89.48%);
+}
+
+.local-coursetransfermanager .ct-page-icon img {
+    width: 45px;
+    height: 45px;
+    /* Override core/theme .icon rule (max-width/height:24px + margin-right). */
+    max-width: 45px;
+    max-height: 45px;
+    margin: 0;
+    object-fit: contain;
+}
+
+.local-coursetransfermanager .ct-hero-text {
+    min-width: 0;
+}
+
+.local-coursetransfermanager .ct-hero-title {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 26px;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    color: var(--text-strong);
+    margin: 0 0 3px;
+}
+
+.local-coursetransfermanager .ct-hero-desc {
+    margin: 0;
+    font-size: 14.5px;
+    line-height: 1.5;
+    color: var(--text-muted);
+    max-width: 640px;
+}
+
+/* ---- Shared footer navigation ---- */
+.local-coursetransfermanager .ct-pagenav {
+    display: flex;
+    gap: 10px;
+    margin-top: 32px;
+    margin-bottom: 8px;
+    padding-top: 20px;
+    border-top: 1px solid var(--divider);
+}
+
+/* ---- Banners / inline alerts ---- */
+.local-coursetransfermanager .ct-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-radius: var(--radius-md);
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.local-coursetransfermanager .ct-banner--success {
+    background: var(--success-50);
+    border: 1px solid #bfe6ce;
+    color: var(--success-500);
+}
+
+.local-coursetransfermanager .ct-banner--warning {
+    background: var(--warning-50);
+    border: 1px solid #f0dcae;
+    color: var(--warning-700);
+}
+
+.local-coursetransfermanager .ct-banner--danger {
+    background: var(--danger-50);
+    border: 1px solid #f2beb8;
+    color: var(--danger-500);
+}
+
+.local-coursetransfermanager .ct-banner--info {
+    background: var(--info-50);
+    border: 1px solid #bcd7fb;
+    color: var(--info-500);
+}
+
+/* ---- Form fields ---- */
+.local-coursetransfermanager .ct-field {
+    margin-bottom: 20px;
+}
+
+.local-coursetransfermanager .ct-field-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-strong);
+    margin-bottom: 6px;
+}
+
+.local-coursetransfermanager .ct-field-help {
+    margin: 6px 2px 0;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.local-coursetransfermanager .ct-field-row {
+    display: flex;
+    gap: 8px;
+}
+
+.local-coursetransfermanager .ct-input {
+    width: 100%;
+    box-sizing: border-box;
+    height: 46px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 0 14px;
+    font-family: var(--font-body);
+    font-size: 14px;
+    color: var(--text-body);
+    background: var(--neutral-0);
+}
+
+.local-coursetransfermanager .ct-input:focus-visible {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+/* ---- Eyebrow (small uppercase section label) ---- */
+.local-coursetransfermanager .ct-eyebrow {
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+/* ---- Wide screens: widen the THEME container ----
+   Same mechanism as coursetransfer's summary page: never a max-width on our
+   own div (it would break the alignment with the theme heading area); the
+   ctm-wide body class is added by the pages that need the extra room and is
+   scoped so this site-wide stylesheet never leaks to other pages.
+
+   CAUTION — this deliberately shadows Boost core's rule
+   (.pagelayout-standard/.limitedwidth #page.drawers .main-inner { max-width: 830px })
+   inside the SAME media query and with one extra class of specificity, so it
+   wins without !important and mobile stays untouched. If a future theme/core
+   changes those selectors, pages simply degrade to the theme default width. */
+body.ctm-wide {
+    /* Single source of truth for the manager content width; a theme or a
+       page can override this variable instead of fighting the rule. */
+    --ctm-content-maxwidth: 1100px;
+}
+
+@media (min-width: 768px) {
+    body.ctm-wide.pagelayout-standard #page.drawers .main-inner,
+    body.ctm-wide.limitedwidth #page.drawers .main-inner {
+        max-width: var(--ctm-content-maxwidth);
+    }
+}
+
+/* ---- Health checks strip ---- */
+.local-coursetransfermanager .ct-checks {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.local-coursetransfermanager .ct-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    background: var(--neutral-0);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+}
+
+.local-coursetransfermanager .ct-check-dot {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-pill);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    background: var(--success-50);
+    color: var(--success-500);
+}
+
+.local-coursetransfermanager .ct-check--warning .ct-check-dot {
+    background: var(--warning-50);
+    color: var(--warning-700);
+}
+
+.local-coursetransfermanager .ct-check--error .ct-check-dot {
+    background: var(--danger-50);
+    color: var(--danger-500);
+}
+
+.local-coursetransfermanager .ct-check--error {
+    border-color: var(--danger-500);
+}
+
+.local-coursetransfermanager .ct-check-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.local-coursetransfermanager .ct-check-label {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-strong);
+}
+
+.local-coursetransfermanager .ct-check-detail {
+    font-size: 12px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.local-coursetransfermanager .ct-check-action {
+    margin-left: auto;
+    flex: none;
+    color: var(--text-link);
+}
+
+/* ---- "Coming up" agenda ---- */
+.local-coursetransfermanager .ct-agenda {
+    padding: 0;
+    margin-bottom: 18px;
+    overflow: hidden;
+}
+
+.local-coursetransfermanager .ct-agenda-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    background: none;
+    border: 0;
+    padding: 16px 20px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.local-coursetransfermanager .ct-agenda-summary {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-body);
+}
+
+.local-coursetransfermanager .ct-agenda-chevron {
+    margin-left: auto;
+    color: var(--text-muted);
+    transition: transform var(--dur-base) var(--ease-standard);
+}
+
+.local-coursetransfermanager .ct-agenda-head[aria-expanded="true"] .ct-agenda-chevron {
+    transform: rotate(180deg);
+}
+
+.local-coursetransfermanager .ct-agenda-body {
+    border-top: 1px solid var(--divider);
+    padding: 6px 20px 14px;
+}
+
+.local-coursetransfermanager .ct-agenda-empty {
+    margin: 12px 0 6px;
+}
+
+.local-coursetransfermanager .ct-agenda-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 10px;
+    border-radius: var(--radius-sm);
+    margin-top: 8px;
+}
+
+.local-coursetransfermanager .ct-agenda-row--danger,
+.local-coursetransfermanager .ct-agenda-row--warning {
+    background: var(--warning-50);
+}
+
+.local-coursetransfermanager .ct-agenda-row--cancelled {
+    background: var(--surface-sunken);
+    opacity: 0.85;
+}
+
+.local-coursetransfermanager .ct-agenda-date {
+    flex: none;
+    width: 44px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.05;
+}
+
+.local-coursetransfermanager .ct-agenda-day {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-strong);
+}
+
+.local-coursetransfermanager .ct-agenda-month {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.local-coursetransfermanager .ct-agenda-rail {
+    flex: none;
+    width: 4px;
+    align-self: stretch;
+    border-radius: var(--radius-pill);
+    background: var(--border-default);
+}
+
+.local-coursetransfermanager .ct-agenda-rail--exec {
+    background: var(--info-500);
+}
+
+.local-coursetransfermanager .ct-agenda-rail--danger {
+    background: var(--danger-500);
+}
+
+.local-coursetransfermanager .ct-agenda-rail--warning {
+    background: var(--warning-500);
+}
+
+.local-coursetransfermanager .ct-agenda-main {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+}
+
+.local-coursetransfermanager .ct-agenda-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.local-coursetransfermanager .ct-agenda-relative {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.local-coursetransfermanager .ct-agenda-title {
+    font-weight: 700;
+    color: var(--text-strong);
+    font-size: 14px;
+}
+
+.local-coursetransfermanager .ct-agenda-detail {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.local-coursetransfermanager .ct-agenda-actions {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.local-coursetransfermanager .ct-agenda-audit {
+    font-size: 12.5px;
+    color: var(--success-500);
+    font-weight: 600;
+}
+
+.local-coursetransfermanager .ct-agenda-footer {
+    font-size: 12px;
+    margin: 12px 2px 2px;
+}
+
+.local-coursetransfermanager .ct-agenda-go {
+    color: var(--text-muted);
+}
+
+/* ---- Tasks bar + filters ---- */
+.local-coursetransfermanager .ct-tasksbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0 10px;
+}
+
+.local-coursetransfermanager .ct-tasksbar-count {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.local-coursetransfermanager .ct-tasksbar .ct-btn {
+    margin-left: auto;
+}
+
+.local-coursetransfermanager .ct-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    align-items: end;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+}
+
+.local-coursetransfermanager .ct-filters .ct-field {
+    margin-bottom: 0;
+}
+
+.local-coursetransfermanager .ct-filters-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* ---- Empty state ---- */
+.local-coursetransfermanager .ct-empty {
+    text-align: center;
+    padding: 44px 28px;
+}
+
+.local-coursetransfermanager .ct-empty-icon {
+    font-size: 30px;
+    color: var(--text-subtle);
+    margin-bottom: 10px;
+}
+
+/* ---- Task card ---- */
+.local-coursetransfermanager .ct-taskcard {
+    margin-bottom: 14px;
+}
+
+.local-coursetransfermanager .ct-taskcard--off {
+    opacity: 0.72;
+}
+
+.local-coursetransfermanager .ct-taskcard--error {
+    border-color: var(--danger-500);
+}
+
+.local-coursetransfermanager .ct-taskcard-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.local-coursetransfermanager .ct-taskcard-title {
+    font-family: var(--font-heading);
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-strong);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.local-coursetransfermanager .ct-taskcard-side {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+}
+
+.local-coursetransfermanager .ct-taskcard-meta,
+.local-coursetransfermanager .ct-taskcard-runs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px 18px;
+    font-size: 13.5px;
+}
+
+.local-coursetransfermanager .ct-taskcard-runs {
+    border-top: 1px solid var(--divider);
+    margin-top: 12px;
+    padding-top: 12px;
+    margin-bottom: 4px;
+}
+
+.local-coursetransfermanager .ct-taskcard-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.local-coursetransfermanager .ct-taskcard .ct-banner {
+    margin: 12px 0 0;
+}
+
+/* ---- Switch (enable/disable) ---- */
+.local-coursetransfermanager .ct-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    border: 0;
+    padding: 4px;
+    cursor: pointer;
+}
+
+.local-coursetransfermanager .ct-switch:focus-visible {
+    outline: none;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.local-coursetransfermanager .ct-switch-track {
+    width: 38px;
+    height: 22px;
+    border-radius: var(--radius-pill);
+    background: var(--neutral-300);
+    position: relative;
+    transition: background-color var(--dur-fast) var(--ease-standard);
+    flex: none;
+}
+
+.local-coursetransfermanager .ct-switch-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: var(--radius-pill);
+    background: var(--neutral-0);
+    box-shadow: var(--shadow-sm);
+    transition: transform var(--dur-fast) var(--ease-standard);
+}
+
+.local-coursetransfermanager .ct-switch[aria-checked="true"] .ct-switch-track {
+    background: var(--success-500);
+}
+
+.local-coursetransfermanager .ct-switch[aria-checked="true"] .ct-switch-thumb {
+    transform: translateX(16px);
+}
+
+.local-coursetransfermanager .ct-switch-label {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.local-coursetransfermanager .ct-switch[aria-checked="true"] .ct-switch-label {
+    color: var(--success-500);
+}
+
+/* ---- Actions menu (kebab) ---- */
+.local-coursetransfermanager .ct-kebab {
+    position: relative;
+}
+
+.local-coursetransfermanager .ct-kebab-btn {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--neutral-0);
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.local-coursetransfermanager .ct-kebab-btn:hover {
+    color: var(--text-strong);
+    border-color: var(--border-strong);
+}
+
+.local-coursetransfermanager .ct-kebab-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    min-width: 200px;
+    background: var(--neutral-0);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    padding: 6px;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+}
+
+.local-coursetransfermanager .ct-kebab-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border: 0;
+    background: none;
+    border-radius: var(--radius-sm);
+    font-size: 13.5px;
+    color: var(--text-body);
+    text-align: left;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.local-coursetransfermanager .ct-kebab-item:hover {
+    background: var(--surface-sunken);
+    color: var(--text-strong);
+    text-decoration: none;
+}
+
+.local-coursetransfermanager .ct-kebab-item--danger {
+    color: var(--danger-500);
+}
+
+.local-coursetransfermanager .ct-kebab-item--danger:hover {
+    background: var(--danger-50);
+    color: var(--danger-500);
+}
+
+/* ---- Wizard ---- */
+.local-coursetransfermanager.ct-wizard {
+    /* Inherits the body token when the page declares ctm-wide; falls back
+       to the same value when it does not. */
+    max-width: var(--ctm-content-maxwidth, 1100px);
+    margin: 0 auto;
+}
+
+.local-coursetransfermanager .ct-steps {
+    display: flex;
+    gap: 6px;
+    background: var(--neutral-0);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 8px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+}
+
+.local-coursetransfermanager .ct-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    background: none;
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    cursor: pointer;
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+}
+
+.local-coursetransfermanager .ct-step-num {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-pill);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12.5px;
+    font-weight: 700;
+    background: var(--neutral-100);
+    color: var(--text-muted);
+}
+
+.local-coursetransfermanager .ct-step--active .ct-step-num {
+    background: var(--color-primary);
+    color: var(--neutral-0);
+}
+
+.local-coursetransfermanager .ct-step--done .ct-step-num {
+    background: var(--success-50);
+    color: var(--success-500);
+}
+
+.local-coursetransfermanager .ct-step-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+    min-width: 0;
+}
+
+.local-coursetransfermanager .ct-step-text strong {
+    font-size: 12.5px;
+    color: var(--text-strong);
+    white-space: nowrap;
+}
+
+.local-coursetransfermanager .ct-step-text small {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.local-coursetransfermanager .ct-wizard-card {
+    padding: 26px 28px 18px;
+}
+
+.local-coursetransfermanager .ct-wizard-actions {
+    display: flex;
+    align-items: center;
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--divider);
+}
+
+.local-coursetransfermanager .ct-wizard-actions-right {
+    margin-left: auto;
+    display: flex;
+    gap: 10px;
+}
+
+.local-coursetransfermanager .ct-sitecard {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    margin: 0 0 18px;
+    font-size: 13.5px;
+}
+
+.local-coursetransfermanager .ct-sitecard-icon {
+    color: var(--color-secondary);
+    font-size: 18px;
+}
+
+.local-coursetransfermanager .ct-sitecard-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.local-coursetransfermanager .ct-sitecard-host {
+    font-weight: 700;
+    color: var(--text-strong);
+}
+
+.local-coursetransfermanager .ct-sitecard-test {
+    font-size: 12px;
+}
+
+.local-coursetransfermanager .ct-sitecard-link {
+    margin-left: auto;
+    font-size: 12.5px;
+    white-space: nowrap;
+}
+
+.local-coursetransfermanager .ct-chipbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 12.5px;
+}
+
+.local-coursetransfermanager .ct-patbox {
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    margin-top: 14px;
+    font-size: 13.5px;
+}
+
+.local-coursetransfermanager .ct-patbox--success {
+    border-color: var(--success-500);
+    background: var(--success-50);
+}
+
+.local-coursetransfermanager .ct-patbox--warning {
+    border-color: var(--warning-500);
+    background: var(--warning-50);
+}
+
+.local-coursetransfermanager .ct-patbox--danger {
+    border-color: var(--danger-500);
+    background: var(--danger-50);
+}
+
+.local-coursetransfermanager .ct-patbox p {
+    margin: 6px 0 0;
+    color: var(--text-body);
+}
+
+.local-coursetransfermanager .ct-patbox-detail {
+    margin-top: 6px;
+}
+
+/* Autocomplete (server-side search) */
+.local-coursetransfermanager .ct-ac {
+    position: relative;
+}
+
+.local-coursetransfermanager .ct-ac-box {
+    position: relative;
+}
+
+.local-coursetransfermanager .ct-ac-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-subtle);
+}
+
+.local-coursetransfermanager .ct-ac-input {
+    padding-left: 38px;
+}
+
+.local-coursetransfermanager .ct-ac-clear {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 0;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.local-coursetransfermanager .ct-ac-drop {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    z-index: 30;
+    background: var(--neutral-0);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.local-coursetransfermanager .ct-ac-item {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: none;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 13.5px;
+}
+
+.local-coursetransfermanager .ct-ac-item:hover {
+    background: var(--surface-sunken);
+}
+
+.local-coursetransfermanager .ct-ac-item small {
+    color: var(--text-muted);
+}
+
+.local-coursetransfermanager .ct-ac-note {
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+/* Option cards */
+.local-coursetransfermanager .ct-optgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin: 8px 0 12px;
+}
+
+.local-coursetransfermanager .ct-opt {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+    text-align: left;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--neutral-0);
+    padding: 14px 16px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.local-coursetransfermanager .ct-opt small {
+    color: var(--text-muted);
+}
+
+.local-coursetransfermanager .ct-opt--active {
+    border-color: var(--color-primary);
+    background: var(--magenta-50);
+}
+
+/* Tabs */
+.local-coursetransfermanager .ct-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--divider);
+    margin-bottom: 16px;
+}
+
+.local-coursetransfermanager .ct-tab {
+    border: 0;
+    background: none;
+    padding: 9px 14px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2.5px solid transparent;
+}
+
+.local-coursetransfermanager .ct-tab[aria-selected="true"] {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+}
+
+/* Semantic schedule sentence */
+.local-coursetransfermanager .ct-sentence {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 14px;
+}
+
+.local-coursetransfermanager .ct-input--inline {
+    width: auto;
+    min-width: 90px;
+}
+
+.local-coursetransfermanager .ct-input--num {
+    width: 110px;
+}
+
+.local-coursetransfermanager .ct-preview {
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    margin: 12px 0;
+    font-size: 13.5px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.local-coursetransfermanager .ct-runrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.local-coursetransfermanager .ct-runrow-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-pill);
+    background: var(--color-primary);
+    flex: none;
+}
+
+/* Retention sections */
+.local-coursetransfermanager .ct-warnhead {
+    border-bottom: 3px solid var(--warning-500);
+    padding-bottom: 10px;
+    margin-bottom: 18px;
+}
+
+.local-coursetransfermanager .ct-warnhead-eyebrow {
+    color: var(--warning-700);
+}
+
+.local-coursetransfermanager .ct-retention {
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 16px 18px;
+    margin: 0 0 16px;
+    min-width: 0;
+}
+
+.local-coursetransfermanager .ct-retention--origin {
+    border-color: var(--warning-500);
+}
+
+.local-coursetransfermanager .ct-retention-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-strong);
+    padding: 0 6px;
+}
+
+/* Recipient chips */
+.local-coursetransfermanager .ct-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.local-coursetransfermanager .ct-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface-sunken);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-pill);
+    padding: 5px 12px;
+    font-size: 12.5px;
+}
+
+.local-coursetransfermanager .ct-chip--fixed {
+    background: var(--magenta-50);
+    border-color: var(--magenta-border);
+    color: var(--magenta-700);
+    font-weight: 600;
+}
+
+.local-coursetransfermanager .ct-chip-x {
+    border: 0;
+    background: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+}
+
+/* Review */
+.local-coursetransfermanager .ct-revgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.local-coursetransfermanager .ct-revcard {
+    position: relative;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13.5px;
+    min-width: 0;
+}
+
+.local-coursetransfermanager .ct-revcard small {
+    color: var(--text-muted);
+}
+
+.local-coursetransfermanager .ct-revcard .ct-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+}
+
+/* Lifecycle timeline */
+.local-coursetransfermanager .ct-timeline {
+    list-style: none;
+    margin: 12px 0 20px;
+    padding: 0;
+}
+
+.local-coursetransfermanager .ct-timeline-item {
+    display: flex;
+    gap: 14px;
+    padding: 10px 0;
+    border-left: 2px solid var(--border-subtle);
+    margin-left: 14px;
+    padding-left: 20px;
+    position: relative;
+}
+
+.local-coursetransfermanager .ct-timeline-dot {
+    position: absolute;
+    left: -15px;
+    top: 12px;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-pill);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--neutral-100);
+    color: var(--text-muted);
+    border: 2px solid var(--neutral-0);
+}
+
+.local-coursetransfermanager .ct-timeline-item--success .ct-timeline-dot {
+    background: var(--success-50);
+    color: var(--success-500);
+}
+
+.local-coursetransfermanager .ct-timeline-item--warning .ct-timeline-dot {
+    background: var(--warning-50);
+    color: var(--warning-700);
+}
+
+.local-coursetransfermanager .ct-timeline-item--danger .ct-timeline-dot {
+    background: var(--danger-50);
+    color: var(--danger-500);
+}
+
+.local-coursetransfermanager .ct-timeline-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.local-coursetransfermanager .ct-timeline-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.local-coursetransfermanager .ct-timeline-title {
+    font-weight: 700;
+    color: var(--text-strong);
+    font-size: 14px;
+}
+
+.local-coursetransfermanager .ct-timeline-when {
+    background: var(--surface-sunken);
+    color: var(--text-muted);
+}
+
+.local-coursetransfermanager .ct-timeline-when::before {
+    display: none;
+}
+
+.local-coursetransfermanager .ct-timeline-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+/* Destructive confirmation + done */
+.local-coursetransfermanager .ct-confirm {
+    border: 1.5px solid var(--danger-500);
+    background: var(--danger-50);
+    border-radius: var(--radius-md);
+    padding: 16px 18px;
+    font-size: 13.5px;
+}
+
+.local-coursetransfermanager .ct-confirm p {
+    margin: 6px 0 10px;
+}
+
+.local-coursetransfermanager .ct-confirm-check {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-weight: 600;
+    margin: 0;
+}
+
+.local-coursetransfermanager .ct-done {
+    text-align: center;
+    padding: 30px 10px;
+}
+
+.local-coursetransfermanager .ct-done-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-pill);
+    background: var(--success-50);
+    color: var(--success-500);
+    font-size: 22px;
+    margin-bottom: 12px;
+}
+
+/* ---- Tracking screen ---- */
+.local-coursetransfermanager .ct-scope {
+    margin-bottom: 14px;
+}
+
+.local-coursetransfermanager .ct-tabcount {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: var(--radius-pill);
+    background: var(--neutral-100);
+    color: var(--text-muted);
+    font-size: 11.5px;
+    margin-left: 6px;
+}
+
+.local-coursetransfermanager .ct-tabcount--warning {
+    background: var(--warning-50);
+    color: var(--warning-700);
+}
+
+.local-coursetransfermanager .ct-livehead {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 18px 0 10px;
+}
+
+.local-coursetransfermanager .ct-livedot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-pill);
+    background: var(--success-500);
+    animation: ctmpulse 1.6s ease-in-out infinite;
+}
+
+@keyframes ctmpulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.35; }
+    100% { opacity: 1; }
+}
+
+.local-coursetransfermanager .ct-livecard {
+    margin-bottom: 12px;
+}
+
+.local-coursetransfermanager .ct-livecard-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+
+.local-coursetransfermanager .ct-livecard-link {
+    margin-left: auto;
+    font-size: 12.5px;
+    white-space: nowrap;
+}
+
+.local-coursetransfermanager .ct-stepper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    font-size: 12.5px;
+}
+
+.local-coursetransfermanager .ct-stepper-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-subtle);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.local-coursetransfermanager .ct-stepper-item--done {
+    color: var(--success-500);
+}
+
+.local-coursetransfermanager .ct-stepper-item--active {
+    color: var(--color-primary);
+}
+
+.local-coursetransfermanager .ct-stepper-sep {
+    flex: 1;
+    max-width: 60px;
+    height: 2px;
+    background: var(--border-default);
+    border-radius: var(--radius-pill);
+}
+
+/* Deletion cards */
+.local-coursetransfermanager .ct-delcard {
+    padding: 0;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.local-coursetransfermanager .ct-delcard--cancelled {
+    opacity: 0.85;
+}
+
+.local-coursetransfermanager .ct-delcard-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+    font-size: 12.5px;
+    font-weight: 700;
+}
+
+.local-coursetransfermanager .ct-delcard-head--danger {
+    background: var(--danger-50);
+    color: var(--danger-500);
+}
+
+.local-coursetransfermanager .ct-delcard-head--warning {
+    background: var(--warning-50);
+    color: var(--warning-700);
+}
+
+.local-coursetransfermanager .ct-delcard-side {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.local-coursetransfermanager .ct-delcard-countdown {
+    margin-left: auto;
+    font-weight: 600;
+}
+
+.local-coursetransfermanager .ct-delcard-countdown--urgent {
+    color: var(--danger-500);
+    text-transform: uppercase;
+}
+
+.local-coursetransfermanager .ct-delcard-body {
+    padding: 14px 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.local-coursetransfermanager .ct-delcard-meta {
+    display: flex;
+    gap: 26px;
+    font-size: 13.5px;
+    flex-wrap: wrap;
+}
+
+.local-coursetransfermanager .ct-delcard-meta .ct-eyebrow {
+    display: block;
+}
+
+/* History table (grid) */
+.local-coursetransfermanager .ct-histwrap {
+    padding: 8px 0;
+    overflow-x: auto;
+}
+
+.local-coursetransfermanager .ct-hist {
+    display: grid;
+    grid-template-columns: 130px minmax(0, 1fr) 150px 150px 110px 44px;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 18px;
+    font-size: 13.5px;
+    border-bottom: 1px solid var(--border-subtle);
+    min-width: 640px;
+}
+
+.local-coursetransfermanager .ct-hist:last-child {
+    border-bottom: 0;
+}
+
+.local-coursetransfermanager .ct-hist--head {
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+.local-coursetransfermanager .ct-hist-date {
+    color: var(--text-muted);
+    font-size: 12.5px;
+}
+
+.local-coursetransfermanager .ct-hist-what {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.local-coursetransfermanager .ct-hist-what small {
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.local-coursetransfermanager .ct-hist-error {
+    grid-column: 1 / -1;
+    background: var(--danger-50);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    font-size: 13px;
+}
+
+.local-coursetransfermanager .ct-hist-error p {
+    margin: 4px 0 6px;
+}
+
+.local-coursetransfermanager .ct-paging {
+    display: flex;
+    align-items: center;
+    margin-top: 12px;
+}
+
+.local-coursetransfermanager .ct-paging-btns {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+}
+
+.local-coursetransfermanager .ct-empty--slim {
+    padding: 22px;
+    text-align: left;
+}
+
+/* ---- Container-responsive base (mobile-first stacking) ---- */
+@container ctm (max-width: 720px) {
+    .local-coursetransfermanager .ct-hero {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .local-coursetransfermanager .ct-hero-side {
+        margin-left: 0;
+    }
+
+    .local-coursetransfermanager .ct-agenda-row {
+        flex-wrap: wrap;
+    }
+
+    .local-coursetransfermanager .ct-agenda-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .local-coursetransfermanager .ct-taskcard-head {
+        flex-direction: column;
+    }
+
+    .local-coursetransfermanager .ct-taskcard-side {
+        margin-left: 0;
+    }
+}

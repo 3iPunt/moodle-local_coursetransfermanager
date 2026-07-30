@@ -1,0 +1,136 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+  @template local_coursetransfermanager/notification_email
+
+  HTML body of the lifecycle notifications (N1-N8). Email-safe by design:
+  tables + INLINE styles only, no external images, no web fonts, no CSS
+  classes (mail clients strip <style>), max 600px wide.
+
+  Context variables:
+  * tone     - accent colour hex, e.g. "#1f9d57"
+  * tonesoft - soft background hex for the accent band
+  * title    - notification title
+  * intro    - main sentence (plain text, already localised)
+  * rows     - optional array of {label, value} key facts
+  * ctatext  - optional call-to-action label
+  * ctaurl   - optional call-to-action URL
+  * footer   - closing line (plugin name)
+
+  Example context (json):
+  {
+    "tone": "#e8a317", "tonesoft": "#fcf3df",
+    "title": "Borrado retenido por seguridad",
+    "intro": "No se ha borrado nada.",
+    "rows": [{"label": "Categoría", "value": "Curs 2025-2026"}],
+    "ctatext": "Ver seguimiento", "ctaurl": "https://example.org",
+    "footer": "Gestor de transferencias de cursos"
+  }
+}}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+       style="background:#f4f4f5;padding:24px 12px;">
+    <tr>
+        <td align="center">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600"
+                   style="max-width:600px;width:100%;background:#ffffff;border:1px solid #dddddf;border-radius:12px;overflow:hidden;font-family:Helvetica,Arial,sans-serif;color:#333333;">
+                <tr>
+                    <td style="height:5px;background:{{ tone }};line-height:5px;font-size:0;">&nbsp;</td>
+                </tr>
+                <tr>
+                    <td style="padding:22px 28px 0;">
+                        {{! Brand row. A PNG is used when the plugin ships one (SVG does not
+                            render in mail clients); otherwise a typographic badge, which no
+                            client can block. }}
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                            <tr>
+                                {{#logourl}}
+                                <td style="padding-right:10px;vertical-align:middle;">
+                                    <img src="{{ logourl }}" alt="" width="28" height="28"
+                                         style="display:block;width:28px;height:28px;border:0;">
+                                </td>
+                                {{/logourl}}
+                                {{^logourl}}
+                                <td style="padding-right:10px;vertical-align:middle;">
+                                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                                        <tr>
+                                            <td width="28" height="28" align="center"
+                                                style="width:28px;height:28px;background:#ea1a7f;border-radius:7px;font-size:11px;font-weight:700;color:#ffffff;font-family:Helvetica,Arial,sans-serif;letter-spacing:.02em;">
+                                                CT
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                                {{/logourl}}
+                                <td style="vertical-align:middle;font-size:12.5px;font-weight:700;color:#6f6f73;letter-spacing:.02em;">
+                                    {{ footer }}
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:16px 28px 8px;">
+                        <h1 style="margin:0;font-size:19px;line-height:1.3;font-weight:700;color:#1e1e1f;">
+                            {{ title }}
+                        </h1>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:6px 28px 0;font-size:14.5px;line-height:1.55;color:#424244;">
+                        {{ intro }}
+                    </td>
+                </tr>
+                {{#hasrows}}
+                <tr>
+                    <td style="padding:18px 28px 0;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                               style="background:{{ tonesoft }};border-radius:8px;">
+                            {{#rows}}
+                            <tr>
+                                <td style="padding:9px 14px;font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6f6f73;width:38%;vertical-align:top;">
+                                    {{ label }}
+                                </td>
+                                <td style="padding:9px 14px 9px 0;font-size:14px;color:#1e1e1f;vertical-align:top;">
+                                    {{ value }}
+                                </td>
+                            </tr>
+                            {{/rows}}
+                        </table>
+                    </td>
+                </tr>
+                {{/hasrows}}
+                {{#ctaurl}}
+                <tr>
+                    <td style="padding:22px 28px 4px;">
+                        <a href="{{ ctaurl }}"
+                           style="display:inline-block;background:{{ tone }};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 22px;border-radius:8px;">
+                            {{ ctatext }}
+                        </a>
+                    </td>
+                </tr>
+                {{/ctaurl}}
+                <tr>
+                    <td style="padding:22px 28px 26px;">
+                        <div style="border-top:1px solid #ececed;padding-top:14px;font-size:12px;line-height:1.5;color:#9a9a9e;">
+                            {{ signature }}
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>

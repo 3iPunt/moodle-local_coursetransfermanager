@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="local/coursetransfermanager/db" VERSION="2026072800" COMMENT="Install XML for local_coursetransfermanager"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
+    <TABLES>
+        <TABLE NAME="local_ctm_tasks" COMMENT="Course transfer manager scheduled tasks">
+            <FIELDS>
+                <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+                <FIELD NAME="type" TYPE="char" LENGTH="50" NOTNULL="true" DEFAULT="restore_category" SEQUENCE="false"/>
+                <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="originsiteid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+                       COMMENT="FK to local_coursetransfer_origin.id"/>
+                <FIELD NAME="categorypattern" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="targetcategoryid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="cronexpression" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="retentiondays" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="30" SEQUENCE="false"/>
+                <FIELD NAME="destinationkeepyears" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="4" SEQUENCE="false"/>
+                <FIELD NAME="restoreuserdata" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+                <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"/>
+                <FIELD NAME="usercreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+                       COMMENT="User who created the task; receives its lifecycle notifications"/>
+                <FIELD NAME="notifylevel" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="full" SEQUENCE="false"
+                       COMMENT="Notification level for this task: full (N1-N7) or essential (N3-N7)"/>
+                <FIELD NAME="notifyrecipients" TYPE="text" NOTNULL="false" SEQUENCE="false"
+                       COMMENT="Comma-separated user ids of additional notification recipients"/>
+                <FIELD NAME="lastruntime" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="nextruntime" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+            </FIELDS>
+            <KEYS>
+                <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+                <KEY NAME="originsite_fk" TYPE="foreign" FIELDS="originsiteid"
+                     REFTABLE="local_coursetransfer_origin" REFFIELDS="id"/>
+                <KEY NAME="usercreated_fk" TYPE="foreign" FIELDS="usercreated" REFTABLE="user" REFFIELDS="id"/>
+            </KEYS>
+            <INDEXES>
+                <INDEX NAME="type_idx" UNIQUE="false" FIELDS="type"/>
+                <INDEX NAME="enabled_idx" UNIQUE="false" FIELDS="enabled"/>
+                <INDEX NAME="nextruntime_idx" UNIQUE="false" FIELDS="nextruntime"/>
+            </INDEXES>
+        </TABLE>
+
+        <TABLE NAME="local_ctm_executions" COMMENT="Course transfer manager task executions">
+            <FIELDS>
+                <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+                <FIELD NAME="taskid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="status" TYPE="char" LENGTH="50" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="manualrun" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+                       COMMENT="1 when launched manually via run now"/>
+                <FIELD NAME="requestid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="origincategoryid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="origincategoryname" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="origincategoryidnumber" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="destinationcategoryid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"
+                       COMMENT="Local category created by the restore; scopes pruning and relocation"/>
+                <FIELD NAME="scheduleddeleteat" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="deletestatus" TYPE="char" LENGTH="20" NOTNULL="false" SEQUENCE="false"
+                       COMMENT="Remote deletion state: scheduled, warned, cancelled, done or failed. Null when not applicable"/>
+                <FIELD NAME="deletecancelledby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"
+                       COMMENT="User who cancelled the scheduled remote deletion"/>
+                <FIELD NAME="deletecancelledat" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="errorcode" TYPE="char" LENGTH="50" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="errormessage" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+            </FIELDS>
+            <KEYS>
+                <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+                <KEY NAME="task_fk" TYPE="foreign" FIELDS="taskid" REFTABLE="local_ctm_tasks" REFFIELDS="id"/>
+            </KEYS>
+            <INDEXES>
+                <INDEX NAME="status_idx" UNIQUE="false" FIELDS="status"/>
+                <INDEX NAME="scheduleddeleteat_idx" UNIQUE="false" FIELDS="scheduleddeleteat"/>
+                <INDEX NAME="deletestatus_idx" UNIQUE="false" FIELDS="deletestatus"/>
+                <INDEX NAME="requestid_idx" UNIQUE="false" FIELDS="requestid"/>
+            </INDEXES>
+        </TABLE>
+
+        <TABLE NAME="local_ctm_prune" COMMENT="Archive pruning candidates announced before deletion (two-phase pruning)">
+            <FIELDS>
+                <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+                <FIELD NAME="taskid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="categoryid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"
+                       COMMENT="Local category candidate to be pruned"/>
+                <FIELD NAME="categoryname" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="announcedat" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="graceuntil" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"
+                       COMMENT="Pruning will not run before this timestamp"/>
+                <FIELD NAME="status" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="announced" SEQUENCE="false"
+                       COMMENT="announced, excluded or done"/>
+                <FIELD NAME="excludedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"
+                       COMMENT="User who excluded this category from pruning"/>
+                <FIELD NAME="excludedat" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+            </FIELDS>
+            <KEYS>
+                <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+                <KEY NAME="task_fk" TYPE="foreign" FIELDS="taskid" REFTABLE="local_ctm_tasks" REFFIELDS="id"/>
+            </KEYS>
+            <INDEXES>
+                <INDEX NAME="status_idx" UNIQUE="false" FIELDS="status"/>
+                <INDEX NAME="categoryid_idx" UNIQUE="false" FIELDS="categoryid"/>
+                <INDEX NAME="graceuntil_idx" UNIQUE="false" FIELDS="graceuntil"/>
+            </INDEXES>
+        </TABLE>
+    </TABLES>
+</XMLDB>

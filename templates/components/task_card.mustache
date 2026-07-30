@@ -1,0 +1,115 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+  @template local_coursetransfermanager/components/task_card
+
+  One configured task: metadata, next/last execution, warning strips, the
+  enable/disable switch and the actions menu. Interactions are wired by the
+  panel AMD module through data-action attributes.
+
+  Context variables: see panel_page::export_task (id, name, enabled,
+  originhost, pattern, resolvedpattern, target, nextrun, last, lasterror...).
+
+  Example context (json):
+  { "id": 1, "name": "Archivo anual", "enabled": true, "pattern": "SJD{YEAR}", "resolvedpattern": "SJD2026" }
+}}
+<article class="ct-card ct-taskcard {{^enabled}}ct-taskcard--off{{/enabled}} {{#last.iserror}}ct-taskcard--error{{/last.iserror}}"
+         data-region="task" data-taskid="{{ id }}">
+    <div class="ct-taskcard-head">
+        <h3 class="ct-taskcard-title">{{{ name }}}
+            {{^enabled}}<span class="ct-badge ct-badge--inactive" data-region="task-state-badge">{{#str}} card_inactive, local_coursetransfermanager {{/str}}</span>{{/enabled}}
+        </h3>
+        <div class="ct-taskcard-side">
+            <button type="button" class="ct-switch" role="switch" aria-checked="{{#enabled}}true{{/enabled}}{{^enabled}}false{{/enabled}}"
+                    data-action="toggle-task" data-taskid="{{ id }}">
+                <span class="ct-switch-track" aria-hidden="true"><span class="ct-switch-thumb"></span></span>
+                <span class="ct-switch-label" data-region="switch-label">
+                    {{#enabled}}{{#str}} card_active, local_coursetransfermanager {{/str}}{{/enabled}}
+                    {{^enabled}}{{#str}} card_inactive, local_coursetransfermanager {{/str}}{{/enabled}}
+                </span>
+            </button>
+            <div class="ct-kebab" data-region="kebab">
+                <button type="button" class="ct-kebab-btn" data-action="kebab-toggle" aria-haspopup="true"
+                        aria-expanded="false" aria-label="{{#str}} actions, local_coursetransfermanager {{/str}}">
+                    <i class="fa fa-ellipsis-v" aria-hidden="true"></i>
+                </button>
+                <div class="ct-kebab-menu" data-region="kebab-menu" hidden>
+                    <a class="ct-kebab-item" href="{{ editurl }}">
+                        <i class="fa fa-pencil" aria-hidden="true"></i> {{#str}} edit {{/str}}
+                    </a>
+                    <button type="button" class="ct-kebab-item" data-action="run-now" data-taskid="{{ id }}"
+                            data-taskname="{{ name }}">
+                        <i class="fa fa-play" aria-hidden="true"></i> {{#str}} runnow, local_coursetransfermanager {{/str}}
+                    </button>
+                    <a class="ct-kebab-item" href="{{ executionsurl }}">
+                        <i class="fa fa-list" aria-hidden="true"></i> {{#str}} executions, local_coursetransfermanager {{/str}}
+                    </a>
+                    <a class="ct-kebab-item ct-kebab-item--danger" href="{{ deleteurl }}">
+                        <i class="fa fa-trash" aria-hidden="true"></i> {{#str}} delete {{/str}}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ct-taskcard-meta">
+        <div class="ct-taskcard-cell">
+            <span class="ct-eyebrow">{{#str}} card_origin, local_coursetransfermanager {{/str}}</span>
+            <span>{{#originhost}}{{{ originhost }}}{{/originhost}}{{#originmissing}}{{#str}} originsitenotfound, local_coursetransfermanager {{/str}}{{/originmissing}}</span>
+        </div>
+        <div class="ct-taskcard-cell">
+            <span class="ct-eyebrow">{{#str}} card_brings, local_coursetransfermanager {{/str}}</span>
+            <span><code>{{ pattern }}</code> → <strong>{{ resolvedpattern }}</strong></span>
+        </div>
+        <div class="ct-taskcard-cell">
+            <span class="ct-eyebrow">{{#str}} card_destination, local_coursetransfermanager {{/str}}</span>
+            <span>{{#target}}{{{ target }}}{{/target}}{{^target}}-{{/target}}</span>
+        </div>
+    </div>
+
+    <div class="ct-taskcard-runs">
+        <div class="ct-taskcard-cell">
+            <span class="ct-eyebrow">{{#str}} card_next, local_coursetransfermanager {{/str}}</span>
+            <span data-region="task-nextrun" class="{{#nextrunpaused}}ct-text-muted{{/nextrunpaused}}">{{ nextrun }}</span>
+        </div>
+        <div class="ct-taskcard-cell">
+            <span class="ct-eyebrow">{{#str}} card_last, local_coursetransfermanager {{/str}}</span>
+            {{#last}}
+            <span>
+                <span class="ct-badge {{ badge }}">{{ label }}</span>
+                {{ date }} · {{ type }}
+                · <a href="{{ executionsurl }}">{{#str}} card_viewdetail, local_coursetransfermanager {{/str}}</a>
+            </span>
+            {{/last}}
+            {{^last}}<span class="ct-text-muted">-</span>{{/last}}
+        </div>
+    </div>
+
+    {{#originko}}
+    <div class="ct-banner ct-banner--warning">
+        <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+        <span>{{{ originko }}}</span>
+    </div>
+    {{/originko}}
+    {{#lasterror}}
+    <div class="ct-banner ct-banner--danger">
+        <i class="fa fa-exclamation-circle" aria-hidden="true"></i>
+        <span>{{#str}} card_last_error, local_coursetransfermanager {{/str}} {{{ lasterror }}}
+            · <a href="{{ executionsurl }}">{{#str}} executions, local_coursetransfermanager {{/str}}</a></span>
+    </div>
+    {{/lasterror}}
+</article>

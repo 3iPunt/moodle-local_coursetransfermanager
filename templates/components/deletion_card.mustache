@@ -1,0 +1,67 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+  @template local_coursetransfermanager/components/deletion_card
+
+  A pending deletion (origin) or pruning candidate (archive): what will be
+  deleted, where, when, who scheduled it — with the always-visible cancel or
+  exclude action. The AMD module confirms and calls the WS.
+
+  Context variables:
+  * isdeletion/isprune - booleans
+  * executionid/pruneid - int
+  * categoryname, taskname, date, relative - strings
+  * urgent - boolean (origin deletion within 3 days)
+
+  Example context (json):
+  { "isdeletion": true, "executionid": 3, "categoryname": "Curs 2024-2025", "taskname": "Archivo anual", "date": "31-jul-2026", "relative": "en 3 días", "urgent": true }
+}}
+<div class="ct-card ct-delcard {{#isdeletion}}ct-delcard--origin{{/isdeletion}}"
+     {{#executionid}}data-executionid="{{ executionid }}"{{/executionid}}
+     {{#pruneid}}data-pruneid="{{ pruneid }}"{{/pruneid}}>
+    <div class="ct-delcard-head {{#isdeletion}}ct-delcard-head--danger{{/isdeletion}}{{#isprune}}ct-delcard-head--warning{{/isprune}}">
+        <span class="ct-delcard-side">
+            <i class="fa {{#isdeletion}}fa-exclamation-triangle{{/isdeletion}}{{#isprune}}fa-archive{{/isprune}}" aria-hidden="true"></i>
+            {{#isdeletion}}{{#str}} agenda_del_label, local_coursetransfermanager {{/str}}{{/isdeletion}}
+            {{#isprune}}{{#str}} agenda_prune_label, local_coursetransfermanager {{/str}}{{/isprune}}
+        </span>
+        <span class="ct-delcard-countdown {{#urgent}}ct-delcard-countdown--urgent{{/urgent}}">
+            {{ relative }}{{#urgent}} · {{#str}} exec_urgent, local_coursetransfermanager {{/str}}{{/urgent}}
+        </span>
+    </div>
+    <div class="ct-delcard-body">
+        <strong>{{#str}} agenda_category, local_coursetransfermanager, {{ categoryname }} {{/str}}</strong>
+        <div class="ct-delcard-meta">
+            <span><span class="ct-eyebrow">{{#str}} exec_del_date, local_coursetransfermanager {{/str}}</span>{{ date }}</span>
+            <span><span class="ct-eyebrow">{{#str}} exec_del_origin, local_coursetransfermanager {{/str}}</span>{{{ taskname }}}</span>
+        </div>
+        <div class="ct-delcard-actions" data-region="delcard-actions">
+            {{#isdeletion}}
+            <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="cancel-deletion"
+                    data-executionid="{{ executionid }}" data-category="{{ categoryname }}">
+                {{#str}} agenda_cancel, local_coursetransfermanager {{/str}}
+            </button>
+            {{/isdeletion}}
+            {{#isprune}}
+            <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="exclude-prune"
+                    data-pruneid="{{ pruneid }}" data-category="{{ categoryname }}">
+                {{#str}} agenda_exclude, local_coursetransfermanager {{/str}}
+            </button>
+            {{/isprune}}
+        </div>
+    </div>
+</div>

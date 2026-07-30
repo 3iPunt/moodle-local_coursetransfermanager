@@ -1,0 +1,112 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+  @template local_coursetransfermanager/panel_page
+
+  Management panel: header, prerequisite health strip, "coming up" agenda,
+  and the configured task cards with filters. The AMD module wires the
+  switch, the actions menu, the run-now flow and the deletion cancellations.
+
+  Context variables: see panel_page::export_for_template.
+
+  Example context (json):
+  { "headertitle": "Transferencias programadas", "checks": [], "agenda": {"items": []}, "tasks": [], "hastasks": false }
+}}
+<div class="local-coursetransfermanager" id="ctm-panel">
+
+    <div class="ct-hero">
+        {{> local_coursetransfermanager/components/page_header }}
+        <div class="ct-hero-side">
+            <a class="ct-btn ct-btn--primary" href="{{ newtaskurl }}">
+                <i class="fa fa-plus" aria-hidden="true"></i>
+                {{#str}} createtask, local_coursetransfermanager {{/str}}
+            </a>
+        </div>
+    </div>
+
+    {{#deletionspaused}}
+    <div class="ct-banner ct-banner--danger">
+        <i class="fa fa-pause-circle" aria-hidden="true"></i>
+        <span>{{#str}} panel_paused, local_coursetransfermanager {{/str}}
+            <a href="{{ settings }}">{{#str}} settings_link, local_coursetransfermanager {{/str}}</a></span>
+    </div>
+    {{/deletionspaused}}
+
+    {{> local_coursetransfermanager/components/health_checks }}
+
+    {{> local_coursetransfermanager/components/agenda }}
+
+    <div class="ct-tasksbar">
+        <span class="ct-eyebrow">{{#str}} tasks_title, local_coursetransfermanager {{/str}}</span>
+        <span class="ct-tasksbar-count">{{#str}} taskcount, local_coursetransfermanager, {{ taskcount }} {{/str}}</span>
+        <button type="button" class="ct-btn ct-btn--ghost ct-btn--sm" data-action="filters-toggle"
+                aria-expanded="{{#filters.active}}true{{/filters.active}}{{^filters.active}}false{{/filters.active}}">
+            <i class="fa fa-filter" aria-hidden="true"></i>
+            {{#str}} filters, local_coursetransfermanager {{/str}}{{#filters.active}} · 1{{/filters.active}}
+        </button>
+    </div>
+
+    <form class="ct-card ct-filters" method="get" action="" data-region="filters" {{^filters.active}}hidden{{/filters.active}}>
+        <div class="ct-field">
+            <label class="ct-field-label" for="ctm-fstatus">{{#str}} status, local_coursetransfermanager {{/str}}</label>
+            <select class="ct-input" id="ctm-fstatus" name="status">
+                <option value="">{{#str}} all {{/str}}</option>
+                {{#filters.statusoptions}}
+                <option value="{{ value }}" {{#selected}}selected{{/selected}}>{{ label }}</option>
+                {{/filters.statusoptions}}
+            </select>
+        </div>
+        <div class="ct-field">
+            <label class="ct-field-label" for="ctm-ffrom">{{#str}} fromdate, local_coursetransfermanager {{/str}}</label>
+            <input class="ct-input" type="date" id="ctm-ffrom" name="fromdate" value="{{ filters.fromdate }}">
+        </div>
+        <div class="ct-field">
+            <label class="ct-field-label" for="ctm-fto">{{#str}} todate, local_coursetransfermanager {{/str}}</label>
+            <input class="ct-input" type="date" id="ctm-fto" name="todate" value="{{ filters.todate }}">
+        </div>
+        <div class="ct-filters-actions">
+            <button type="submit" class="ct-btn ct-btn--secondary ct-btn--sm">{{#str}} filters_apply, local_coursetransfermanager {{/str}}</button>
+            <a class="ct-btn ct-btn--ghost ct-btn--sm" href="{{ clearurl }}">{{#str}} filters_clear, local_coursetransfermanager {{/str}}</a>
+        </div>
+    </form>
+
+    {{^hastasks}}
+    <div class="ct-card ct-empty">
+        <i class="fa fa-calendar ct-empty-icon" aria-hidden="true"></i>
+        <h3>{{#str}} tasks_empty_title, local_coursetransfermanager {{/str}}</h3>
+        <p class="ct-text-muted">{{#str}} tasks_empty_body, local_coursetransfermanager {{/str}}</p>
+        <a class="ct-btn ct-btn--primary" href="{{ newtaskurl }}">
+            <i class="fa fa-plus" aria-hidden="true"></i>
+            {{#str}} createtask, local_coursetransfermanager {{/str}}
+        </a>
+    </div>
+    {{/hastasks}}
+
+    <div class="ct-tasklist">
+        {{#tasks}}
+        {{> local_coursetransfermanager/components/task_card }}
+        {{/tasks}}
+    </div>
+
+    {{> local_coursetransfermanager/components/page_nav }}
+</div>
+
+{{#js}}
+require(['local_coursetransfermanager/panel'], function(Panel) {
+    Panel.init('ctm-panel');
+});
+{{/js}}

@@ -56,6 +56,27 @@ if ($hassiteconfig) {
         PARAM_INT
     ));
 
+    // The academic year, not the natural one, drives the conservation policy.
+    $months = [];
+    for ($month = 1; $month <= 12; $month++) {
+        $months[$month] = userdate(make_timestamp(2000, $month, 1), '%B');
+    }
+    $settings->add(new admin_setting_configselect(
+        'local_coursetransfermanager/academicyearstartmonth',
+        get_string('setting_academicyearstartmonth', 'local_coursetransfermanager'),
+        get_string('setting_academicyearstartmonth_desc', 'local_coursetransfermanager'),
+        9,
+        $months
+    ));
+
+    $settings->add(new admin_setting_configtext(
+        'local_coursetransfermanager/maxarchivepertick',
+        get_string('setting_maxarchivepertick', 'local_coursetransfermanager'),
+        get_string('setting_maxarchivepertick_desc', 'local_coursetransfermanager'),
+        3,
+        PARAM_INT
+    ));
+
     $settings->add(new admin_setting_configcheckbox(
         'local_coursetransfermanager/deletionspaused',
         get_string('setting_deletionspaused', 'local_coursetransfermanager'),

@@ -103,7 +103,8 @@ final class wizard_external_test extends \advanced_testcase {
 
         // Invalid cron.
         try {
-            wizard_external::task_save(0, 'X', $origin, '^X$', $category->id, 'malo', 30, 4, true, 'full', []);
+            wizard_external::task_save(0, 'X', $origin, 'X{YEAR}', 2, $category->id, 'malo',
+                30, 4, true, 'full', []);
             $this->fail('Expected invalid_parameter_exception (cron)');
         } catch (\invalid_parameter_exception $e) {
             $this->assertStringContainsString('cronexpression', $e->debuginfo ?? $e->getMessage());
@@ -111,15 +112,35 @@ final class wizard_external_test extends \advanced_testcase {
 
         // Missing category.
         try {
-            wizard_external::task_save(0, 'X', $origin, '^X$', 999999, '0 2 1 9 *', 30, 4, true, 'full', []);
+            wizard_external::task_save(0, 'X', $origin, 'X{YEAR}', 2, 999999, '0 2 1 9 *',
+                30, 4, true, 'full', []);
             $this->fail('Expected invalid_parameter_exception (category)');
         } catch (\invalid_parameter_exception $e) {
             $this->assertStringContainsString('targetcategoryid', $e->debuginfo ?? $e->getMessage());
         }
 
+        // A mask with no year placeholder cannot rotate: it must be refused.
+        try {
+            wizard_external::task_save(0, 'X', $origin, 'X-FIXED', 2, $category->id, '0 2 1 9 *',
+                30, 4, true, 'full', []);
+            $this->fail('Expected invalid_parameter_exception (mask)');
+        } catch (\invalid_parameter_exception $e) {
+            $this->assertStringContainsString('categorypattern', $e->debuginfo ?? $e->getMessage());
+        }
+
+        // Half a policy is no policy: zero years in production is refused.
+        try {
+            wizard_external::task_save(0, 'X', $origin, 'X{YEAR}', 0, $category->id, '0 2 1 9 *',
+                30, 4, true, 'full', []);
+            $this->fail('Expected invalid_parameter_exception (originkeepyears)');
+        } catch (\invalid_parameter_exception $e) {
+            $this->assertStringContainsString('originkeepyears', $e->debuginfo ?? $e->getMessage());
+        }
+
         // Non-positive retention.
         $this->expectException(\invalid_parameter_exception::class);
-        wizard_external::task_save(0, 'X', $origin, '^X$', $category->id, '0 2 1 9 *', 0, 4, true, 'full', []);
+        wizard_external::task_save(0, 'X', $origin, 'X{YEAR}', 2, $category->id, '0 2 1 9 *',
+            0, 4, true, 'full', []);
     }
 
     /**
@@ -134,7 +155,7 @@ final class wizard_external_test extends \advanced_testcase {
         $category = $this->getDataGenerator()->create_category();
         $recipient = $this->getDataGenerator()->create_user();
 
-        $result = wizard_external::task_save(0, 'Archivo anual', $origin, 'SJD{YEAR}',
+        $result = wizard_external::task_save(0, 'Archivo anual', $origin, 'SJD{YEAR}', 2,
             $category->id, '0 2 1 9 *', 30, 4, false, 'essential',
             [(int)$recipient->id, 999999]);
 
@@ -144,15 +165,158 @@ final class wizard_external_test extends \advanced_testcase {
         $this->assertSame((int)$USER->id, (int)$task->usercreated);
         $this->assertSame('essential', $task->notifylevel);
         $this->assertSame((string)$recipient->id, $task->notifyrecipients);
+        $this->assertSame(2, (int)$task->originkeepyears);
         $this->assertNotEmpty($task->nextruntime);
         $this->assertNotEmpty($result['firstrun']);
 
         // Updating keeps the enabled state and does not touch the creator.
-        wizard_external::task_save((int)$task->id, 'Renombrada', $origin, 'SJD{YEAR}',
+        wizard_external::task_save((int)$task->id, 'Renombrada', $origin, 'SJD{YEAR}', 3,
             $category->id, '0 2 1 9 *', 15, 2, true, 'full', []);
         $updated = $DB->get_record('local_ctm_tasks', ['id' => $task->id]);
         $this->assertSame('Renombrada', $updated->name);
+        $this->assertSame(3, (int)$updated->originkeepyears);
         $this->assertSame((int)$task->usercreated, (int)$updated->usercreated);
         $this->assertNull($updated->notifyrecipients);
+    }
+
+    /**
+     * An unusable mask never reaches the origin: it is refused up front, and
+     * the projection says so instead of inventing years.
+     */
+    public function test_policy_preview_refuses_half_a_policy(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $origin = $this->seed_origin();
+
+        foreach ([['CAT-FIXED', 2, 4], ['CAT-{YEAR}', 0, 4], ['CAT-{YEAR}', 2, 0]] as [$mask, $p, $v]) {
+            $preview = wizard_external::policy_preview($origin, $mask, $p, $v, 0);
+            $this->assertFalse($preview['valid'], $mask . " P={$p} V={$v} should be refused");
+            $this->assertSame([], $preview['rows']);
+        }
+    }
+
+    /**
+     * The projection the wizard shows is the policy, year by year: it must say
+     * exactly what the engine will delete and when.
+     */
+    public function test_policy_preview_projects_the_policy(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        set_config('academicyearstartmonth', 9, 'local_coursetransfermanager');
+        $origin = $this->seed_origin();
+
+        // Default mode: pure arithmetic, no HTTP round trip. This is what the
+        // wizard calls on every keystroke.
+        $preview = wizard_external::policy_preview($origin, 'CAT-{YEAR}-{NEXTYEAR}', 2, 4, 0);
+
+        $this->assertTrue($preview['valid']);
+        $this->assertSame(6, $preview['totalyears']);
+        $this->assertSame($preview['currentyear'] - 2, $preview['archiveyear']);
+        $this->assertSame($preview['currentyear'] - 6, $preview['pruneyear']);
+        $this->assertCount(6, $preview['rows']);
+
+        $first = $preview['rows'][0];
+        $this->assertTrue($first['iscurrent']);
+        $this->assertCount(2, $first['production']);
+        $this->assertCount(4, $first['archive']);
+        $this->assertCount(1, $first['deleted']);
+        // Nothing exists locally in this test, so every cell is a projection.
+        $this->assertFalse($first['archive'][0]['exists']);
+        $this->assertStringStartsWith('CAT-', $first['archive'][0]['idnumber']);
+    }
+
+    /**
+     * With the origin asked and unreachable, the projection is still the same
+     * arithmetic: it just cannot mark which remote years exist. A policy that
+     * stopped being legible because a platform is down would be useless.
+     */
+    public function test_policy_preview_survives_an_unreachable_origin(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $origin = $this->seed_origin();
+
+        $offline = wizard_external::policy_preview($origin, 'CAT-{YEAR}-{NEXTYEAR}', 2, 4, 0, true);
+        // The remote call logs its failure through coursetransfer; that is the
+        // platform's own reporting, not a problem with the projection.
+        $this->resetDebugging();
+
+        $this->assertTrue($offline['valid']);
+        $this->assertCount(6, $offline['rows']);
+        $this->assertSame(6, $offline['totalyears']);
+        foreach ($offline['rows'][0]['production'] as $cell) {
+            $this->assertFalse($cell['exists']);
+        }
+    }
+
+    /**
+     * A category already in the archive is reported as existing, so the admin
+     * tells apart what is there from what is only projected.
+     */
+    public function test_policy_preview_marks_what_already_exists(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $origin = $this->seed_origin();
+
+        $generator = $this->getDataGenerator();
+        $archive = $generator->create_category(['name' => 'Archivo']);
+        $current = \local_coursetransfermanager\manager\academic_year::current_year();
+        $existing = $generator->create_category(['name' => 'Anterior', 'parent' => $archive->id,
+            'idnumber' => 'CAT-' . ($current - 2) . '-' . ($current - 1)]);
+
+        // Managed means the task brought it: that is what makes it a fact.
+        $taskid = $DB->insert_record('local_ctm_tasks', (object)[
+            'name' => 'T', 'originsiteid' => $origin, 'categorypattern' => 'CAT-{YEAR}-{NEXTYEAR}',
+            'targetcategoryid' => $archive->id, 'cronexpression' => '0 2 1 9 *',
+            'retentiondays' => 30, 'originkeepyears' => 2, 'destinationkeepyears' => 4,
+            'restoreuserdata' => 0, 'enabled' => 1, 'usercreated' => 2, 'notifylevel' => 'full',
+            'timecreated' => time(), 'timemodified' => time(),
+        ]);
+        $DB->insert_record('local_ctm_executions', (object)[
+            'taskid' => $taskid, 'status' => 'completed', 'manualrun' => 0,
+            'destinationcategoryid' => $existing->id,
+            'timecreated' => time(), 'timemodified' => time(),
+        ]);
+
+        $preview = wizard_external::policy_preview($origin, 'CAT-{YEAR}-{NEXTYEAR}', 2, 4,
+            (int)$archive->id, false, (int)$taskid);
+
+        // First archive cell of the current run is A−2, the one just created.
+        $cell = $preview['rows'][0]['archive'][0];
+        $this->assertSame($current - 2, $cell['year']);
+        $this->assertTrue($cell['exists']);
+        // And a year nobody created is still only a projection.
+        $this->assertFalse($preview['rows'][0]['archive'][1]['exists']);
+    }
+
+    /**
+     * An origin that does not answer must produce "down" with its reason, never
+     * a guess: a rotation that cannot see the origin archives nothing.
+     */
+    public function test_test_pattern_reports_a_silent_origin(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $origin = $this->seed_origin();
+
+        $result = wizard_external::test_pattern($origin, 'CAT-{YEAR}-{NEXTYEAR}');
+        $this->resetDebugging();
+        $this->assertSame('down', $result['status']);
+        $this->assertSame(0, $result['matchcount']);
+        $this->assertSame([], $result['categories']);
+        $this->assertNotSame('', $result['message']);
+        // Even with no answer, the mask example is computed locally.
+        $this->assertStringStartsWith('CAT-', $result['example']);
+    }
+
+    /**
+     * A mask with no year placeholder is refused before any remote call.
+     */
+    public function test_test_pattern_refuses_an_unusable_mask(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $result = wizard_external::test_pattern($this->seed_origin(), 'CAT-FIXED');
+        $this->assertSame('invalid', $result['status']);
+        $this->assertSame('', $result['example']);
     }
 }

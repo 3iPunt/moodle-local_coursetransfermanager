@@ -26,6 +26,7 @@
 require_once(__DIR__ . '/../../config.php');
 
 use local_coursetransfer\coursetransfer_sites;
+use local_coursetransfermanager\manager\academic_year;
 use local_coursetransfermanager\manager\task_manager;
 use local_coursetransfermanager\notification\notifier;
 use local_coursetransfermanager\output\task_wizard_page;
@@ -87,6 +88,10 @@ $wizardcontext->warningdays = ($warningdays === false || $warningdays === '')
 $gracedays = get_config('local_coursetransfermanager', 'prunegracedays');
 $wizardcontext->gracedays = ($gracedays === false || $gracedays === '')
     ? task_manager::DEFAULT_PRUNE_GRACE_DAYS : (int)$gracedays;
+// The wizard previews idnumbers client side: it needs the same academic year the
+// engine uses, or the examples on screen would not match what the task will do.
+$wizardcontext->startmonth = academic_year::current_year_start_month();
+$wizardcontext->currentyear = academic_year::current_year();
 
 // Page setup.
 $url = new moodle_url('/local/coursetransfermanager/edit.php', $id ? ['id' => $id] : []);

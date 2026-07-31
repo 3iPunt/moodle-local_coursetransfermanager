@@ -269,8 +269,14 @@ class panel_page implements renderable, templatable {
             'originhost' => $task->originhost !== null ? s($task->originhost) : null,
             'originmissing' => $task->originhost === null,
             'pattern' => s((string)$task->categorypattern),
-            'resolvedpattern' => s(task_manager::resolve_pattern((string)$task->categorypattern)),
+            // The year the policy will archive next, not the current one.
+            'resolvedpattern' => s((string)($task->targetidnumber ?? $task->categorypattern)),
+            'policy' => get_string('card_policy', 'local_coursetransfermanager', (object)[
+                'origin' => (int)$task->originkeepyears,
+                'archive' => (int)$task->destinationkeepyears,
+            ]),
             'target' => $task->targetcategoryname !== null ? format_string($task->targetcategoryname) : null,
+            'viewurl' => (new moodle_url('/local/coursetransfermanager/task.php', ['id' => $task->id]))->out(false),
             'editurl' => (new moodle_url('/local/coursetransfermanager/edit.php', ['id' => $task->id]))->out(false),
             'deleteurl' => (new moodle_url('/local/coursetransfermanager/delete.php', ['id' => $task->id]))->out(false),
             'executionsurl' => (new moodle_url('/local/coursetransfermanager/executions.php',

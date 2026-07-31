@@ -48,6 +48,9 @@
                     <i class="fa fa-ellipsis-v" aria-hidden="true"></i>
                 </button>
                 <div class="ct-kebab-menu" data-region="kebab-menu" hidden>
+                    <a class="ct-kebab-item" href="{{ viewurl }}">
+                        <i class="fa fa-eye" aria-hidden="true"></i> {{#str}} card_view_task, local_coursetransfermanager {{/str}}
+                    </a>
                     <a class="ct-kebab-item" href="{{ editurl }}">
                         <i class="fa fa-pencil" aria-hidden="true"></i> {{#str}} edit {{/str}}
                     </a>
@@ -56,7 +59,7 @@
                         <i class="fa fa-play" aria-hidden="true"></i> {{#str}} runnow, local_coursetransfermanager {{/str}}
                     </button>
                     <a class="ct-kebab-item" href="{{ executionsurl }}">
-                        <i class="fa fa-list" aria-hidden="true"></i> {{#str}} executions, local_coursetransfermanager {{/str}}
+                        <i class="fa fa-list-ul" aria-hidden="true"></i> {{#str}} card_view_executions, local_coursetransfermanager {{/str}}
                     </a>
                     <a class="ct-kebab-item ct-kebab-item--danger" href="{{ deleteurl }}">
                         <i class="fa fa-trash" aria-hidden="true"></i> {{#str}} delete {{/str}}
@@ -89,15 +92,15 @@
         <div class="ct-taskcard-cell">
             <span class="ct-eyebrow">{{#str}} card_last, local_coursetransfermanager {{/str}}</span>
             {{#last}}
-            <span>
+            <span class="ct-taskcard-last">
                 <span class="ct-badge {{ badge }}">{{ label }}</span>
-                {{ date }} · {{ type }}
-                · <a href="{{ executionsurl }}">{{#str}} card_viewdetail, local_coursetransfermanager {{/str}}</a>
+                <span>{{ date }} · {{ type }}</span>
             </span>
             {{/last}}
-            {{^last}}<span class="ct-text-muted">-</span>{{/last}}
+            {{^last}}<span class="ct-text-muted">{{#str}} card_never_run, local_coursetransfermanager {{/str}}</span>{{/last}}
         </div>
     </div>
+
 
     {{#originko}}
     <div class="ct-banner ct-banner--warning">

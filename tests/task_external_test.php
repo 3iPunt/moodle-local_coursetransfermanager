@@ -127,4 +127,43 @@ final class task_external_test extends \advanced_testcase {
         $this->assertSame(deletion_manager::STATUS_CANCELLED,
             $DB->get_field('local_ctm_executions', 'deletestatus', ['id' => $executionid]));
     }
+
+    /**
+     * Adopting an archive category is an explicit, audited and reversible
+     * decision — and only for a category inside this task's archive.
+     */
+    public function test_set_adoption(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $generator = $this->getDataGenerator();
+        $archive = $generator->create_category(['name' => 'Archive']);
+        $yearly = $generator->create_category(['name' => '2020/21',
+            'idnumber' => 'SJD2020', 'parent' => $archive->id]);
+        $elsewhere = $generator->create_category(['name' => 'Elsewhere', 'idnumber' => 'SJD2019']);
+
+        $taskid = $this->seed();
+        $DB->set_field('local_ctm_tasks', 'targetcategoryid', $archive->id, ['id' => $taskid]);
+
+        // A category outside this task's archive is refused, not adopted.
+        try {
+            task_external::set_adoption($taskid, (int)$elsewhere->id, true);
+            $this->fail('Expected moodle_exception for a category outside the archive');
+        } catch (\moodle_exception $e) {
+            $this->assertFalse($DB->record_exists('local_ctm_adopted',
+                ['taskid' => $taskid, 'categoryid' => $elsewhere->id]));
+        }
+
+        $result = task_external::set_adoption($taskid, (int)$yearly->id, true);
+        $this->assertTrue($result['adopted']);
+        $this->assertNotEmpty($result['audit']);
+        $this->assertTrue($DB->record_exists('local_ctm_adopted',
+            ['taskid' => $taskid, 'categoryid' => $yearly->id]));
+
+        $released = task_external::set_adoption($taskid, (int)$yearly->id, false);
+        $this->assertFalse($released['adopted']);
+        $this->assertFalse($DB->record_exists('local_ctm_adopted',
+            ['taskid' => $taskid, 'categoryid' => $yearly->id]));
+    }
 }

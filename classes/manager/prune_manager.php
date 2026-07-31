@@ -35,7 +35,7 @@ use stdClass;
  * candidates with a grace period, never deleted on the spot. Only categories
  * the manager itself created (tracked via destinationcategoryid on the
  * executions) are ever considered, and the year is extracted strictly — a
- * code like MED1042 is not a year (CTM-001).
+ * code like MED1042 is not a year.
  *
  * Phase 2 (execute): once the grace period ends, candidates still announced
  * (not excluded by an admin) are deleted.
@@ -56,22 +56,6 @@ final class prune_manager {
     public const STATUS_DONE = 'done';
 
     /**
-     * Extract the academic year of an idnumber, strictly.
-     *
-     * Only standalone 20xx groups count; when a range like 2025-2026 is
-     * present the most recent year wins (safer: prunes later, never earlier).
-     *
-     * @param string $idnumber Category idnumber.
-     * @return int|null Year, or null when the idnumber carries no year.
-     */
-    public static function extract_year(string $idnumber): ?int {
-        if (!preg_match_all('/(?<!\d)(20\d{2})(?!\d)/', $idnumber, $matches)) {
-            return null;
-        }
-        return max(array_map('intval', $matches[1]));
-    }
-
-    /**
      * Phase 1: announce new pruning candidates with a grace period.
      *
      * @param int $now Current timestamp.
@@ -81,7 +65,8 @@ final class prune_manager {
     public static function detect(int $now, int $gracedays): array {
         global $DB;
 
-        // Only categories the manager created are ever pruning candidates (CTM-001).
+        // Only categories the manager created are ever pruning candidates: never
+        // touch content that reached this platform some other way.
         $managed = $DB->get_fieldset_select(
             'local_ctm_executions',
             'DISTINCT destinationcategoryid',
@@ -98,9 +83,14 @@ final class prune_manager {
         );
 
         $announced = [];
-        $currentyear = (int) date('Y', $now);
 
         foreach ($tasks as $task) {
+            // The conservation policy decides: prune academic year <= A - P - V.
+            $mask = rotation::mask($task);
+            if (!$mask) {
+                continue;
+            }
+
             try {
                 $parent = core_course_category::get((int) $task->targetcategoryid, IGNORE_MISSING, true);
             } catch (\Throwable $e) {
@@ -110,13 +100,13 @@ final class prune_manager {
                 continue;
             }
 
-            $cutoff = $currentyear - (int) $task->destinationkeepyears;
+            $cutoff = rotation::prune_threshold($task, $now);
 
             foreach ($parent->get_children() as $child) {
                 if (!in_array((int) $child->id, $managed, true)) {
                     continue;
                 }
-                $year = self::extract_year((string) $child->idnumber);
+                $year = $mask->year_of((string) $child->idnumber);
                 if ($year === null || $year > $cutoff) {
                     continue;
                 }

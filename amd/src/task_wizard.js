@@ -33,6 +33,7 @@ define([
     var step = 1;
     var state = null;
     var preview = {firstrun: 0, valid: false};
+    var lifecycletimer = null;
 
     var call = function(method, args) {
         return Ajax.call([{
@@ -94,12 +95,8 @@ define([
             if (state.name.trim() === '' || !state.originsiteid) {
                 return false;
             }
-            try {
-                new RegExp(state.categorypattern);
-            } catch (e) {
-                return false;
-            }
-            return state.categorypattern.trim() !== '';
+            // A mask without a year placeholder cannot rotate anything.
+            return /\{(YEAR|YY)\}/.test(state.categorypattern);
         }
         if (number === 2) {
             return !!state.targetcategory;
@@ -142,19 +139,59 @@ define([
     };
 
     var refreshPatternHelp = function() {
-        var resolved = resolvePattern(state.categorypattern);
-        Str.get_string('wz_pattern_help', 'local_coursetransfermanager', resolved)
+        var help = region('pattern-help');
+        var valid = /\{(YEAR|YY)\}/.test(state.categorypattern);
+        var request = valid
+            ? {key: 'wz_pattern_help', component: 'local_coursetransfermanager',
+                param: {year: resolvePattern(state.categorypattern), previous:
+                    resolvePattern(state.categorypattern, currentYear() - 1)}}
+            : {key: 'wz_pattern_help_invalid', component: 'local_coursetransfermanager'};
+        Str.get_string(request.key, request.component, request.param)
             .then(function(text) {
-                region('pattern-help').textContent = text;
+                help.textContent = text;
+                help.classList.toggle('ct-text-danger', !valid);
                 return null;
             }).catch(Notification.exception);
     };
 
-    var resolvePattern = function(pattern) {
-        var year = new Date().getFullYear();
-        return pattern.split('{YEAR}').join(year).split('{PREVYEAR}').join(year - 1);
+    /**
+     * Render the mask for one academic year, mirroring academic_year::example().
+     *
+     * @param {String} pattern Naming mask.
+     * @param {Number} year Starting academic year.
+     * @return {String} Idnumber the mask produces for that year.
+     */
+    var resolvePattern = function(pattern, year) {
+        var start = year || currentYear();
+        return pattern
+            .split('{YEAR}').join(start)
+            .split('{NEXTYEAR}').join(start + 1)
+            .split('{YY}').join(String(start).slice(-2))
+            .split('{NEXTYY}').join(String(start + 1).slice(-2))
+            .split('{ANY}').join('')
+            .split('{DIGITS}').join('');
     };
 
+    /**
+     * Academic year in progress: before the start month the year is still the previous one.
+     *
+     * @return {Number} Starting academic year.
+     */
+    var currentYear = function() {
+        if (cfg && cfg.currentyear) {
+            return cfg.currentyear;
+        }
+        var now = new Date();
+        var startmonth = (cfg && cfg.startmonth) || 9;
+        return now.getMonth() + 1 < startmonth ? now.getFullYear() - 1 : now.getFullYear();
+    };
+
+    /**
+     * Ask the origin which yearly categories the mask recognises.
+     *
+     * The mask is not expected to match one category: it must recognise the whole
+     * series, because the rotation decides year by year which one to archive.
+     */
     var testPattern = function() {
         var result = region('pattern-result');
         Str.get_string('wz_pat_loading', 'local_coursetransfermanager').then(function(loading) {
@@ -165,26 +202,38 @@ define([
             var keys = {
                 ok: ['wz_pat_ok', 'wz_pat_ok_hint'],
                 none: ['wz_pat_none', 'wz_pat_none_hint'],
-                many: ['wz_pat_many', 'wz_pat_many_hint'],
                 down: ['wz_pat_down', 'wz_pat_down_hint'],
-                invalid: ['wz_pat_invalid', 'wz_pat_invalid'],
-            }[response.status];
+                invalid: ['wz_pat_invalid', 'wz_pat_invalid_hint'],
+            }[response.status] || ['wz_pat_invalid', 'wz_pat_invalid_hint'];
             var params = {
-                ok: [null, null],
-                none: [response.resolvedpattern, null],
-                many: [response.matchcount, null],
+                ok: [response.matchcount, null],
+                none: [null, response.example],
                 down: [null, response.message],
                 invalid: [null, null],
-            }[response.status];
+            }[response.status] || [null, null];
+
             return Str.get_strings([
                 {key: keys[0], component: 'local_coursetransfermanager', param: params[0]},
                 {key: keys[1], component: 'local_coursetransfermanager', param: params[1]},
+                {key: 'wz_pat_courses', component: 'local_coursetransfermanager'},
+                {key: 'wz_pat_more', component: 'local_coursetransfermanager',
+                    param: Math.max(0, response.matchcount - response.categories.length)},
             ]).then(function(strings) {
-                var tone = response.status === 'ok' ? 'success' : (response.status === 'many' ? 'warning' : 'danger');
+                var tone = response.status === 'ok' ? 'success'
+                    : (response.status === 'none' ? 'warning' : 'danger');
                 var detail = '';
-                if (response.status === 'ok') {
-                    detail = '<div class="ct-patbox-detail"><strong>' + esc(response.name) + '</strong> · '
-                        + esc(response.idnumber) + '</div>';
+                if (response.categories.length) {
+                    detail = '<ul class="ct-patbox-list">'
+                        + response.categories.map(function(category) {
+                            return '<li><span class="ct-badge ct-badge--neutral">' + esc(category.label)
+                                + '</span> <code>' + esc(category.idnumber) + '</code> '
+                                + '<span class="ct-text-muted">' + esc(category.name) + ' · '
+                                + category.courses + ' ' + esc(strings[2]) + '</span></li>';
+                        }).join('')
+                        + '</ul>';
+                    if (response.matchcount > response.categories.length) {
+                        detail += '<p class="ct-text-muted">' + esc(strings[3]) + '</p>';
+                    }
                 }
                 result.innerHTML = '<div class="ct-patbox ct-patbox--' + tone + '"><strong>' + esc(strings[0])
                     + '</strong>' + detail + '<p>' + esc(strings[1]) + '</p></div>';
@@ -315,30 +364,109 @@ define([
 
         var originbox = region('ret-origin-box');
         var archivebox = region('ret-archive-box');
-        if (preview.valid && preview.firstrun) {
-            var deletion = preview.firstrun + state.retentiondays * 86400;
-            var warning = deletion - cfg.warningdays * 86400;
-            var cutoff = new Date(preview.firstrun * 1000).getFullYear() - state.destinationkeepyears;
-            Str.get_strings([
-                {
-                    key: 'wz_ret_origin_box', component: 'local_coursetransfermanager',
-                    param: {first: fmtDate(preview.firstrun), deletion: fmtDate(deletion),
-                        warning: fmtDate(warning), days: cfg.warningdays},
-                },
-                {
-                    key: 'wz_ret_archive_box', component: 'local_coursetransfermanager',
-                    param: {years: state.destinationkeepyears, cutoff: cutoff, grace: cfg.gracedays},
-                },
-            ]).then(function(strings) {
-                originbox.textContent = strings[0];
-                archivebox.textContent = strings[1];
+        var policybox = region('ret-policy-box');
+
+        // Both years feed the same formula, so half a policy has no readable
+        // meaning: say it instead of printing "keeps 0 years, survives 2".
+        if (state.originkeepyears < 1 || state.destinationkeepyears < 1) {
+            Str.get_string('wz_years_invalid', 'local_coursetransfermanager').then(function(text) {
+                policybox.textContent = text;
+                archivebox.textContent = text;
+                policybox.classList.add('ct-text-danger');
+                archivebox.classList.add('ct-text-danger');
                 return null;
             }).catch(Notification.exception);
+            region('ret-short').hidden = state.retentiondays >= 15;
+            refreshLifecycle();
+            return;
+        }
+        policybox.classList.remove('ct-text-danger');
+        archivebox.classList.remove('ct-text-danger');
+
+        // The policy is pure arithmetic on the academic year, not on the run date:
+        // production keeps the P newest courses, the archive the V before those.
+        var current = currentYear();
+        var kept = [];
+        for (var year = current; year > current - state.originkeepyears; year--) {
+            kept.push(yearLabel(year));
+        }
+        var archiving = current - state.originkeepyears;
+        var pruning = archiving - state.destinationkeepyears;
+
+        var requests = [
+            {
+                key: 'wz_ret_policy_box', component: 'local_coursetransfermanager',
+                param: {years: state.originkeepyears, kept: kept.join(', '),
+                    archiving: yearLabel(archiving), idnumber: resolvePattern(state.categorypattern, archiving)},
+            },
+            {
+                key: 'wz_ret_archive_box', component: 'local_coursetransfermanager',
+                param: {years: state.destinationkeepyears, cutoff: yearLabel(pruning),
+                    grace: cfg.gracedays, total: state.originkeepyears + state.destinationkeepyears},
+            },
+        ];
+        if (preview.valid && preview.firstrun) {
+            var deletion = preview.firstrun + state.retentiondays * 86400;
+            requests.push({
+                key: 'wz_ret_origin_box', component: 'local_coursetransfermanager',
+                param: {first: fmtDate(preview.firstrun), deletion: fmtDate(deletion),
+                    warning: fmtDate(deletion - cfg.warningdays * 86400), days: cfg.warningdays},
+            });
         } else {
             originbox.textContent = '';
-            archivebox.textContent = '';
         }
+
+        Str.get_strings(requests).then(function(strings) {
+            policybox.textContent = strings[0];
+            archivebox.textContent = strings[1];
+            if (strings.length > 2) {
+                originbox.textContent = strings[2];
+            }
+            return null;
+        }).catch(Notification.exception);
+
         region('ret-short').hidden = state.retentiondays >= 15;
+        refreshLifecycle();
+    };
+
+    /**
+     * Academic year as the admin reads it: 2026 is "2026/27".
+     *
+     * @param {Number} year Starting academic year.
+     * @return {String} Human readable label.
+     */
+    var yearLabel = function(year) {
+        return year + '/' + String(year + 1).slice(-2);
+    };
+
+    /**
+     * Year by year projection of the policy, straight from the engine.
+     *
+     * Recalculated server side on purpose: the table has to say what the task will
+     * really do, not what the browser guesses it will do.
+     */
+    var refreshLifecycle = function() {
+        var box = region('lifecycle-table');
+        window.clearTimeout(lifecycletimer);
+        lifecycletimer = window.setTimeout(function() {
+            call('policy_preview', {
+                siteid: state.originsiteid,
+                pattern: state.categorypattern,
+                originkeepyears: state.originkeepyears,
+                destinationkeepyears: state.destinationkeepyears,
+                targetcategoryid: state.targetcategory ? state.targetcategory.id : 0,
+                // No remote call here: this runs on every keystroke, and the
+                // origin is already inspected by "Test the mask in the origin".
+                withorigin: false,
+                // Editing an existing task: mark the years already archived.
+                taskid: cfg.taskid,
+            }).then(function(response) {
+                return Templates.render('local_coursetransfermanager/components/lifecycle_table', response);
+            }).then(function(html) {
+                box.innerHTML = html;
+                return null;
+            }).catch(Notification.exception);
+        }, 300);
     };
 
     var selectedHost = function() {
@@ -390,7 +518,8 @@ define([
             {key: 'wz_rev_first', component: 'local_coursetransfermanager',
                 param: preview.firstrun ? fmtDate(preview.firstrun) : '-'},
             {key: 'wz_rev_ret', component: 'local_coursetransfermanager',
-                param: {days: state.retentiondays, years: state.destinationkeepyears}},
+                param: {days: state.retentiondays, years: state.destinationkeepyears,
+                    production: state.originkeepyears}},
             {key: state.notifylevel === 'full' ? 'wz_level_full' : 'wz_level_essential',
                 component: 'local_coursetransfermanager'},
             {key: 'wz_confirm_summary', component: 'local_coursetransfermanager',
@@ -423,8 +552,9 @@ define([
         var host = selectedHost();
         var deletion = preview.firstrun ? preview.firstrun + state.retentiondays * 86400 : 0;
         var warning = deletion ? deletion - cfg.warningdays * 86400 : 0;
-        var cutoff = preview.firstrun
-            ? new Date(preview.firstrun * 1000).getFullYear() - state.destinationkeepyears : 0;
+        // Pruning cutoff is policy arithmetic on the academic year (A − P − V), not
+        // on the run date: the run date only decides *when* the maths is applied.
+        var cutoff = currentYear() - state.originkeepyears - state.destinationkeepyears;
 
         var requests = [];
         for (var i = 1; i <= 9; i++) {
@@ -476,6 +606,7 @@ define([
             name: state.name,
             originsiteid: state.originsiteid,
             categorypattern: state.categorypattern,
+            originkeepyears: state.originkeepyears,
             targetcategoryid: state.targetcategory ? state.targetcategory.id : 0,
             cronexpression: buildCron(),
             retentiondays: state.retentiondays,
@@ -532,6 +663,7 @@ define([
             categorypattern: cfg.categorypattern,
             targetcategory: cfg.targetcategory,
             retentiondays: cfg.retentiondays,
+            originkeepyears: cfg.originkeepyears,
             destinationkeepyears: cfg.destinationkeepyears,
             restoreuserdata: cfg.restoreuserdata,
             notifylevel: cfg.notifylevel,
@@ -557,6 +689,7 @@ define([
         document.getElementById('ctm-hour').value = String(state.hour);
         document.getElementById('ctm-cron').value = state.cronexpression;
         document.getElementById('ctm-retention').value = String(state.retentiondays);
+        document.getElementById('ctm-originkeep').value = String(state.originkeepyears);
         document.getElementById('ctm-keepyears').value = String(state.destinationkeepyears);
         if (state.targetcategory) {
             document.getElementById('ctm-dest').value = state.targetcategory.path || state.targetcategory.name;
@@ -615,6 +748,10 @@ define([
                 state.retentiondays = parseInt(node.dataset.days, 10);
                 document.getElementById('ctm-retention').value = node.dataset.days;
                 refreshRetention();
+            } else if (action === 'preset-originkeep') {
+                state.originkeepyears = parseInt(node.dataset.years, 10);
+                document.getElementById('ctm-originkeep').value = node.dataset.years;
+                refreshRetention();
             } else if (action === 'save') {
                 save();
             }
@@ -646,8 +783,25 @@ define([
             } else if (field === 'destinationkeepyears') {
                 state.destinationkeepyears = parseInt(value, 10) || 0;
                 refreshRetention();
+            } else if (field === 'originkeepyears') {
+                state.originkeepyears = parseInt(value, 10) || 0;
+                refreshRetention();
             } else if (field === 'confirm') {
                 root.querySelector('[data-action="save"]').disabled = !event.target.checked;
+            }
+        });
+
+        // Leaving a year field empty is a transient state while typing, not a
+        // policy: put the minimum back so the screen never stays in limbo.
+        root.addEventListener('change', function(event) {
+            var field = event.target.dataset.field;
+            if (field !== 'originkeepyears' && field !== 'destinationkeepyears') {
+                return;
+            }
+            if (state[field] < 1) {
+                state[field] = 1;
+                event.target.value = '1';
+                refreshRetention();
             }
         });
 
@@ -686,13 +840,18 @@ define([
     };
 
     var initTokens = function() {
-        var year = new Date().getFullYear();
+        var year = currentYear();
         Str.get_strings([
             {key: 'wz_token_year', component: 'local_coursetransfermanager', param: year},
-            {key: 'wz_token_prevyear', component: 'local_coursetransfermanager', param: year - 1},
+            {key: 'wz_token_nextyear', component: 'local_coursetransfermanager', param: year + 1},
+            {key: 'wz_token_yy', component: 'local_coursetransfermanager', param: String(year).slice(-2)},
+            {key: 'wz_token_nextyy', component: 'local_coursetransfermanager',
+                param: String(year + 1).slice(-2)},
         ]).then(function(strings) {
             region('token-year').textContent = strings[0];
-            region('token-prevyear').textContent = strings[1];
+            region('token-nextyear').textContent = strings[1];
+            region('token-yy').textContent = strings[2];
+            region('token-nextyy').textContent = strings[3];
             return null;
         }).catch(Notification.exception);
     };

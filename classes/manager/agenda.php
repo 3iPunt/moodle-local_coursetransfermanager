@@ -86,6 +86,12 @@ final class agenda {
 
         $items = [];
         foreach ($DB->get_records_select('local_ctm_tasks', $select, $params, 'nextruntime ASC') as $task) {
+            // What the policy will actually bring on that date: the academic year
+            // that will have outstayed its time in production by then, not the
+            // current one. Nobody has to work that out in their head.
+            $mask = rotation::mask($task);
+            $targetyear = $mask ? rotation::archive_threshold($task, (int) $task->nextruntime) : null;
+
             $items[] = (object) [
                 'type' => self::TYPE_EXECUTION,
                 'date' => (int) $task->nextruntime,
@@ -93,7 +99,10 @@ final class agenda {
                 'taskname' => $task->name,
                 'originsiteid' => (int) $task->originsiteid,
                 'categorypattern' => (string) $task->categorypattern,
-                'resolvedpattern' => task_manager::resolve_pattern((string) $task->categorypattern),
+                'targetyear' => $targetyear,
+                'resolvedpattern' => ($mask && $targetyear !== null)
+                    ? academic_year::example_for($mask, $targetyear)
+                    : (string) $task->categorypattern,
             ];
         }
         return $items;

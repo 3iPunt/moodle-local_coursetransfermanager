@@ -7,7 +7,6 @@
  * under .local-coursetransfermanager so nothing leaks outside the
  * plugin's content region. The page shell stays with the theme
  * (Boost, BS4/BS5); fonts fall back to the theme/system stack.
- * Source of truth: .tresipunt docs, design/claude-design/.
  * ============================================================
  */
 
@@ -68,7 +67,7 @@
     --border-subtle: var(--neutral-100);
     --divider: var(--neutral-100);
     --focus-ring: rgba(248, 64, 21, 0.45);
-    /* Type: the theme owns typography (family decision, TIPGOODLE-352 Q4). Both
+    /* Type: the theme owns typography (family decision). Both
        tokens resolve to `inherit` so every ct-* component uses the theme
        font; a theme shipping brand fonts (e.g. Fresk) cascades in alone. */
     --font-heading: inherit;
@@ -86,7 +85,7 @@
     color: var(--text-body);
     /* No own width/margin: the content fills the theme's already-centered
        content container, so the page heading and this content share the
-       same box and line up (family decision, TIPGOODLE-353). */
+       same box and line up (family decision). */
 }
 
 /* ---- Typography helpers ---- */
@@ -99,6 +98,10 @@
 
 .local-coursetransfermanager .ct-text-muted {
     color: var(--text-muted);
+}
+
+.local-coursetransfermanager .ct-text-danger {
+    color: var(--danger-500);
 }
 
 /* ---- Card ---- */
@@ -171,6 +174,12 @@
 .local-coursetransfermanager .ct-badge--inactive {
     background: var(--neutral-100);
     color: var(--neutral-500);
+}
+
+/* Plain label: an academic year, a count. Carries no state. */
+.local-coursetransfermanager .ct-badge--neutral {
+    background: var(--neutral-100);
+    color: var(--neutral-700);
 }
 
 /* ---- Buttons ---- */
@@ -801,6 +810,15 @@ body.ctm-wide {
     margin: 12px 0 0;
 }
 
+/* Last execution: badge and text on one line, wrapping cleanly. */
+.local-coursetransfermanager .ct-taskcard-last {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+
 /* ---- Switch (enable/disable) ---- */
 .local-coursetransfermanager .ct-switch {
     display: inline-flex;
@@ -1092,6 +1110,220 @@ body.ctm-wide {
 
 .local-coursetransfermanager .ct-patbox-detail {
     margin-top: 6px;
+}
+
+/* Yearly categories the mask recognised in the origin */
+.local-coursetransfermanager .ct-patbox-list {
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.local-coursetransfermanager .ct-patbox-list li {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 6px 0;
+    border-top: 1px solid var(--border-soft, rgba(0, 0, 0, 0.08));
+}
+
+.local-coursetransfermanager .ct-patbox-list li:first-child {
+    border-top: 0;
+}
+
+.local-coursetransfermanager .ct-patbox-list code {
+    font-size: 0.85rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.05);
+}
+
+/* ---- Task lifecycle view (task.php) ---- */
+.local-coursetransfermanager .ct-policyline {
+    margin: 0 0 14px;
+    color: var(--text-body);
+}
+
+.local-coursetransfermanager .ct-policyline code {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.local-coursetransfermanager .ct-viewlist {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.local-coursetransfermanager .ct-viewlist-item {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 0;
+    border-top: 1px solid var(--border-default);
+}
+
+.local-coursetransfermanager .ct-viewlist-item:first-child {
+    border-top: 0;
+}
+
+/* Takes the slack so the trailing metadata and buttons align to the right. */
+.local-coursetransfermanager .ct-viewlist-main {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+
+.local-coursetransfermanager .ct-viewlist-main code {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.05);
+    font-size: 0.85rem;
+}
+
+.local-coursetransfermanager .ct-viewlist-foot {
+    margin: 12px 0 0;
+    font-size: 0.85rem;
+}
+
+/* Narrow: stack each row so nothing is squeezed out of view. */
+@container (max-width: 560px) {
+    .local-coursetransfermanager .ct-viewlist-item {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 6px;
+    }
+}
+
+/* ---- Lifecycle projection table ---- */
+.local-coursetransfermanager .ct-lifecycle-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+}
+
+.local-coursetransfermanager .ct-lifecycle-key {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.local-coursetransfermanager .ct-lifecycle-key::before {
+    content: '';
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: var(--neutral-300);
+}
+
+.local-coursetransfermanager .ct-lifecycle-key--production::before {
+    background: var(--success-500);
+}
+
+.local-coursetransfermanager .ct-lifecycle-key--archive::before {
+    background: var(--info-500);
+}
+
+.local-coursetransfermanager .ct-lifecycle-key--deleted::before {
+    background: var(--danger-500);
+}
+
+.local-coursetransfermanager .ct-lifecycle-total {
+    margin-inline-start: auto;
+}
+
+/* Wide content scrolls inside its own box: the page never scrolls sideways. */
+.local-coursetransfermanager .ct-lifecycle-scroll {
+    overflow-x: auto;
+}
+
+.local-coursetransfermanager .ct-lifecycle-table {
+    width: 100%;
+    min-width: 520px;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.local-coursetransfermanager .ct-lifecycle-caption {
+    caption-side: top;
+    text-align: start;
+    padding-bottom: 8px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.local-coursetransfermanager .ct-lifecycle-table th,
+.local-coursetransfermanager .ct-lifecycle-table td {
+    padding: 8px 10px;
+    text-align: start;
+    vertical-align: top;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.local-coursetransfermanager .ct-lifecycle-table thead th {
+    color: var(--text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.local-coursetransfermanager .ct-lifecycle-row--current {
+    background: var(--neutral-50, rgba(0, 0, 0, 0.02));
+}
+
+.local-coursetransfermanager .ct-lifecycle-row--current > th {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.local-coursetransfermanager .ct-lifecycle-cells {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.local-coursetransfermanager .ct-lifecycle-cell {
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: var(--neutral-100);
+    color: var(--neutral-700);
+    white-space: nowrap;
+}
+
+/* Not there yet: a projection, not a fact. */
+.local-coursetransfermanager .ct-lifecycle-cell--projected {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px dashed var(--border-default);
+}
+
+.local-coursetransfermanager .ct-lifecycle-cell--gone {
+    background: var(--danger-50);
+    color: var(--danger-500);
+    text-decoration: line-through;
+}
+
+.local-coursetransfermanager .ct-lifecycle-foot {
+    margin: 10px 0 0;
+    font-size: 0.85rem;
+}
+
+/* Stack the legend when there is no room for it in one line. */
+@container (max-width: 560px) {
+    .local-coursetransfermanager .ct-lifecycle-total {
+        margin-inline-start: 0;
+    }
 }
 
 /* Autocomplete (server-side search) */

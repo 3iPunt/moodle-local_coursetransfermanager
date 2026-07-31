@@ -35,9 +35,10 @@ use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
 use core_text;
-use curl;
 use invalid_parameter_exception;
+use local_coursetransfermanager\manager\academic_year;
 use local_coursetransfermanager\manager\origin;
+use local_coursetransfermanager\manager\rotation;
 use local_coursetransfermanager\manager\schedule;
 use local_coursetransfermanager\manager\task_manager;
 
@@ -70,76 +71,76 @@ class wizard_external extends external_api {
     public static function test_pattern_parameters(): external_function_parameters {
         return new external_function_parameters([
             'siteid' => new external_value(PARAM_INT, 'Origin site id'),
-            'pattern' => new external_value(PARAM_RAW_TRIMMED, 'Category pattern (may carry {YEAR}/{PREVYEAR})'),
+            'pattern' => new external_value(PARAM_RAW_TRIMMED, 'Naming mask ({YEAR}, {NEXTYEAR}, {YY}, {NEXTYY}…)'),
         ]);
     }
 
     /**
-     * Test the category pattern against the origin, live.
+     * Test the naming mask against the origin, live.
+     *
+     * The mask no longer points at one year: it recognises every yearly
+     * category. So the test lists what it recognises in the origin (with the
+     * academic year of each one) — that is what tells the admin whether the
+     * mask describes their naming, before trusting a policy that deletes.
      *
      * @param int $siteid Origin site id.
-     * @param string $pattern Pattern with placeholders.
-     * @return array {status: ok|none|many|down, resolvedpattern, name, idnumber, matchcount, message}
+     * @param string $pattern Naming mask.
+     * @return array {status: ok|none|down|invalid, matchcount, categories, example, message}
      */
     public static function test_pattern(int $siteid, string $pattern): array {
-        global $CFG;
-
         $params = self::validate_parameters(self::test_pattern_parameters(), [
             'siteid' => $siteid,
             'pattern' => $pattern,
         ]);
         self::require_manager();
 
-        $resolved = task_manager::resolve_pattern($params['pattern']);
         $result = [
-            'status' => 'down',
-            'resolvedpattern' => $resolved,
-            'name' => '',
-            'idnumber' => '',
+            'status' => 'invalid',
             'matchcount' => 0,
+            'categories' => [],
+            'example' => '',
             'message' => '',
         ];
 
-        // The pattern must at least compile as a regex before bothering the origin.
-        if (@preg_match('/' . str_replace('/', '\/', $resolved) . '/', '') === false) {
-            $result['status'] = 'invalid';
+        if (!academic_year::is_valid_mask($params['pattern'])) {
             return $result;
         }
 
-        try {
-            $site = origin::site($params['siteid']);
+        $mask = new academic_year($params['pattern']);
+        $result['example'] = academic_year::example($params['pattern'], academic_year::current_year());
 
-            require_once($CFG->libdir . '/filelib.php');
-            $curl = new curl();
-            $response = $curl->post(rtrim($site->host, '/') . '/webservice/rest/server.php', [
-                'wstoken' => $site->token,
-                'wsfunction' => 'local_coursetransfer_get_category_idnumber',
-                'moodlewsrestformat' => 'json',
-                'pattern' => $resolved,
-            ]);
-
-            $data = json_decode((string)$response, true);
-            if (!is_array($data)) {
-                $result['message'] = get_string('invalidresponse', 'local_coursetransfermanager');
-                return $result;
-            }
-            if (!empty($data['exception'])) {
-                $result['message'] = trim(($data['errorcode'] ?? '') . ' ' . ($data['message'] ?? ''));
-                return $result;
-            }
-
-            $matchcount = (int)($data['matchcount'] ?? 0);
-            $result['matchcount'] = $matchcount;
-            if (!empty($data['success'])) {
-                $result['status'] = 'ok';
-                $result['name'] = (string)($data['category']['name'] ?? '');
-                $result['idnumber'] = (string)($data['category']['idnumber'] ?? '');
-            } else {
-                $result['status'] = $matchcount === 0 ? 'none' : 'many';
-            }
-        } catch (\Throwable $e) {
-            $result['message'] = $e->getMessage();
+        $remote = origin::categories_result($params['siteid']);
+        if ($remote->error !== '') {
+            // The origin refused or could not be reached: never guess, and say why.
+            $result['status'] = 'down';
+            $result['message'] = $remote->error;
+            return $result;
         }
+        $categories = $remote->categories;
+
+        $recognised = [];
+        foreach ($categories as $category) {
+            if (empty($category->idnumber)) {
+                continue;
+            }
+            $year = $mask->year_of((string) $category->idnumber);
+            if ($year === null) {
+                continue;
+            }
+            $recognised[] = [
+                'year' => $year,
+                'label' => $year . '/' . substr((string) ($year + 1), -2),
+                'name' => (string) $category->name,
+                'idnumber' => (string) $category->idnumber,
+                'courses' => (int) $category->totalcourses,
+            ];
+        }
+
+        usort($recognised, static fn(array $a, array $b): int => $b['year'] <=> $a['year']);
+
+        $result['status'] = empty($recognised) ? 'none' : 'ok';
+        $result['matchcount'] = count($recognised);
+        $result['categories'] = array_slice($recognised, 0, 12);
 
         return $result;
     }
@@ -151,12 +152,161 @@ class wizard_external extends external_api {
      */
     public static function test_pattern_returns(): external_single_structure {
         return new external_single_structure([
-            'status' => new external_value(PARAM_ALPHA, 'ok | none | many | down | invalid'),
-            'resolvedpattern' => new external_value(PARAM_RAW, 'Pattern with the year placeholders resolved'),
-            'name' => new external_value(PARAM_TEXT, 'Matched category name'),
-            'idnumber' => new external_value(PARAM_TEXT, 'Matched category idnumber'),
-            'matchcount' => new external_value(PARAM_INT, 'Number of matches in the origin'),
+            'status' => new external_value(PARAM_ALPHA, 'ok | none | down | invalid'),
+            'matchcount' => new external_value(PARAM_INT, 'Yearly categories the mask recognises in the origin'),
+            'example' => new external_value(PARAM_TEXT, 'Idnumber this mask produces for the current academic year'),
+            'categories' => new external_multiple_structure(new external_single_structure([
+                'year' => new external_value(PARAM_INT, 'Starting academic year'),
+                'label' => new external_value(PARAM_TEXT, 'Academic year, human readable'),
+                'name' => new external_value(PARAM_TEXT, 'Category name'),
+                'idnumber' => new external_value(PARAM_TEXT, 'Category idnumber'),
+                'courses' => new external_value(PARAM_INT, 'Courses in the category'),
+            ])),
             'message' => new external_value(PARAM_RAW, 'Raw failure detail when the origin did not answer'),
+        ]);
+    }
+
+    /**
+     * Parameters of policy_preview().
+     *
+     * @return external_function_parameters
+     */
+    public static function policy_preview_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'siteid' => new external_value(PARAM_INT, 'Origin site id'),
+            'pattern' => new external_value(PARAM_RAW_TRIMMED, 'Naming mask'),
+            'originkeepyears' => new external_value(PARAM_INT, 'Academic years kept in the origin'),
+            'destinationkeepyears' => new external_value(PARAM_INT, 'Academic years kept in the archive'),
+            'targetcategoryid' => new external_value(PARAM_INT, 'Archive category, 0 when not chosen yet',
+                VALUE_DEFAULT, 0),
+            'withorigin' => new external_value(PARAM_BOOL,
+                'Ask the origin which years exist there (one HTTP round trip)', VALUE_DEFAULT, false),
+            'taskid' => new external_value(PARAM_INT,
+                'Existing task, so the projection can tell facts from projections', VALUE_DEFAULT, 0),
+        ]);
+    }
+
+    /**
+     * Year by year projection of the retention policy, for the wizard table.
+     *
+     * The whole point of this screen is that nobody has to imagine what the task
+     * will delete in four years: the projection says it out loud, run by run.
+     *
+     * @param int $siteid Origin site id.
+     * @param string $pattern Naming mask.
+     * @param int $originkeepyears Academic years kept in the origin.
+     * @param int $destinationkeepyears Academic years kept in the archive.
+     * @param int $targetcategoryid Archive category, 0 when not chosen yet.
+     * @param bool $withorigin Ask the origin which years exist there.
+     * @param int $taskid Existing task id, 0 while creating one.
+     * @return array Projection rows plus the thresholds behind them.
+     */
+    public static function policy_preview(int $siteid, string $pattern, int $originkeepyears,
+            int $destinationkeepyears, int $targetcategoryid = 0, bool $withorigin = false,
+            int $taskid = 0): array {
+        $params = self::validate_parameters(self::policy_preview_parameters(), [
+            'siteid' => $siteid,
+            'pattern' => $pattern,
+            'originkeepyears' => $originkeepyears,
+            'destinationkeepyears' => $destinationkeepyears,
+            'targetcategoryid' => $targetcategoryid,
+            'withorigin' => $withorigin,
+            'taskid' => $taskid,
+        ]);
+        self::require_manager();
+
+        $result = [
+            'valid' => false,
+            'currentyear' => academic_year::current_year(),
+            'currentlabel' => '',
+            'archiveyear' => 0,
+            'pruneyear' => 0,
+            'totalyears' => 0,
+            'rows' => [],
+        ];
+
+        if (!academic_year::is_valid_mask($params['pattern'])
+                || $params['originkeepyears'] < 1 || $params['destinationkeepyears'] < 1) {
+            return $result;
+        }
+
+        // A throwaway task object: the projection is pure policy arithmetic, so it
+        // works before anything is saved. That is what makes the table a preview.
+        // The id, when there is one, is what lets it tell an archived year that
+        // really exists from one that is only projected.
+        $draft = (object) [
+            'id' => $params['taskid'],
+            'originsiteid' => $params['siteid'],
+            'categorypattern' => $params['pattern'],
+            'originkeepyears' => $params['originkeepyears'],
+            'destinationkeepyears' => $params['destinationkeepyears'],
+            'targetcategoryid' => $params['targetcategoryid'],
+        ];
+
+        $current = academic_year::current_year();
+        $result['valid'] = true;
+        $result['currentlabel'] = $current . '/' . substr((string) ($current + 1), -2);
+        $result['archiveyear'] = rotation::archive_threshold($draft);
+        $result['pruneyear'] = rotation::prune_threshold($draft);
+        $result['totalyears'] = $params['originkeepyears'] + $params['destinationkeepyears'];
+
+        foreach (rotation::project($draft, 6, null, (bool) $params['withorigin']) as $row) {
+            $result['rows'][] = [
+                'year' => $row->year,
+                'label' => $row->label,
+                'iscurrent' => $row->iscurrent,
+                'production' => array_map([self::class, 'export_cell'], $row->production),
+                'archive' => array_map([self::class, 'export_cell'], $row->archive),
+                'deleted' => array_map([self::class, 'export_cell'], $row->deleted),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * One projection cell as the template consumes it.
+     *
+     * @param \stdClass $cell Cell from rotation::project().
+     * @return array
+     */
+    private static function export_cell(\stdClass $cell): array {
+        return [
+            'year' => (int) $cell->year,
+            'label' => $cell->year . '/' . substr((string) ($cell->year + 1), -2),
+            'idnumber' => (string) $cell->idnumber,
+            'exists' => (bool) $cell->exists,
+        ];
+    }
+
+    /**
+     * Returns of policy_preview().
+     *
+     * @return external_single_structure
+     */
+    public static function policy_preview_returns(): external_single_structure {
+        $cell = static fn(): external_single_structure => new external_single_structure([
+            'year' => new external_value(PARAM_INT, 'Starting academic year'),
+            'label' => new external_value(PARAM_TEXT, 'Academic year, human readable'),
+            'idnumber' => new external_value(PARAM_TEXT, 'Idnumber, real or projected'),
+            'exists' => new external_value(PARAM_BOOL, 'True when the category exists today'),
+        ]);
+
+        return new external_single_structure([
+            'valid' => new external_value(PARAM_BOOL, 'False when the mask or the years are unusable'),
+            'currentyear' => new external_value(PARAM_INT, 'Academic year running now'),
+            'currentlabel' => new external_value(PARAM_TEXT, 'Academic year running now, human readable'),
+            'archiveyear' => new external_value(PARAM_INT, 'Newest year this run would archive'),
+            'pruneyear' => new external_value(PARAM_INT, 'Newest year this run would delete for good'),
+            'totalyears' => new external_value(PARAM_INT, 'Years a course survives in total'),
+            'rows' => new external_multiple_structure(new external_single_structure([
+                'year' => new external_value(PARAM_INT, 'Academic year of the run'),
+                'label' => new external_value(PARAM_TEXT, 'Academic year of the run, human readable'),
+                'iscurrent' => new external_value(PARAM_BOOL, 'True for the run happening this year'),
+                'production' => new external_multiple_structure($cell()),
+                'archive' => new external_multiple_structure($cell()),
+                'deleted' => new external_multiple_structure($cell()),
+            ])),
         ]);
     }
 
@@ -356,7 +506,8 @@ class wizard_external extends external_api {
             'id' => new external_value(PARAM_INT, 'Task id (0 to create)'),
             'name' => new external_value(PARAM_TEXT, 'Task name'),
             'originsiteid' => new external_value(PARAM_INT, 'Origin site id'),
-            'categorypattern' => new external_value(PARAM_RAW_TRIMMED, 'Category pattern'),
+            'categorypattern' => new external_value(PARAM_RAW_TRIMMED, 'Naming mask of the yearly categories'),
+            'originkeepyears' => new external_value(PARAM_INT, 'Academic years kept in the origin'),
             'targetcategoryid' => new external_value(PARAM_INT, 'Destination parent category id'),
             'cronexpression' => new external_value(PARAM_RAW_TRIMMED, '5-field cron expression'),
             'retentiondays' => new external_value(PARAM_INT, 'Days before the origin deletion'),
@@ -387,7 +538,8 @@ class wizard_external extends external_api {
      * @throws invalid_parameter_exception On any validation failure.
      */
     public static function task_save(int $id, string $name, int $originsiteid, string $categorypattern,
-            int $targetcategoryid, string $cronexpression, int $retentiondays, int $destinationkeepyears,
+            int $originkeepyears, int $targetcategoryid, string $cronexpression, int $retentiondays,
+            int $destinationkeepyears,
             bool $restoreuserdata, string $notifylevel, array $notifyrecipients = []): array {
         global $DB;
 
@@ -396,6 +548,7 @@ class wizard_external extends external_api {
             'name' => $name,
             'originsiteid' => $originsiteid,
             'categorypattern' => $categorypattern,
+            'originkeepyears' => $originkeepyears,
             'targetcategoryid' => $targetcategoryid,
             'cronexpression' => $cronexpression,
             'retentiondays' => $retentiondays,
@@ -411,7 +564,8 @@ class wizard_external extends external_api {
             throw new invalid_parameter_exception('name');
         }
         origin::site($params['originsiteid']); // Throws when unset or missing.
-        if (@preg_match('/' . str_replace('/', '\/', $params['categorypattern']) . '/', '') === false) {
+        // The mask must describe a yearly naming: without a year there is no policy.
+        if (!academic_year::is_valid_mask($params['categorypattern'])) {
             throw new invalid_parameter_exception('categorypattern');
         }
         if (!core_course_category::get($params['targetcategoryid'], IGNORE_MISSING)) {
@@ -420,8 +574,16 @@ class wizard_external extends external_api {
         if (!schedule::is_valid($params['cronexpression'])) {
             throw new invalid_parameter_exception('cronexpression');
         }
-        if ($params['retentiondays'] < 1 || $params['destinationkeepyears'] < 1) {
-            throw new invalid_parameter_exception('retention');
+        // Named one by one: an admin fixing a rejected save needs to know which
+        // window is wrong, not that "the retention" is.
+        if ($params['retentiondays'] < 1) {
+            throw new invalid_parameter_exception('retentiondays');
+        }
+        if ($params['originkeepyears'] < 1) {
+            throw new invalid_parameter_exception('originkeepyears');
+        }
+        if ($params['destinationkeepyears'] < 1) {
+            throw new invalid_parameter_exception('destinationkeepyears');
         }
         if (!in_array($params['notifylevel'], ['full', 'essential'], true)) {
             throw new invalid_parameter_exception('notifylevel');
@@ -437,6 +599,7 @@ class wizard_external extends external_api {
             'name' => trim($params['name']),
             'originsiteid' => $params['originsiteid'],
             'categorypattern' => $params['categorypattern'],
+            'originkeepyears' => $params['originkeepyears'],
             'targetcategoryid' => $params['targetcategoryid'],
             'cronexpression' => $params['cronexpression'],
             'retentiondays' => $params['retentiondays'],

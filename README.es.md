@@ -1,4 +1,4 @@
-<!-- Versión en español. English version: README.md -->
+<!-- Versión en español. English version: README.md · Versió en català: README.ca.md -->
 <p align="center">
   <img src="pix/logo.png" alt="" width="280">
 </p>
@@ -15,7 +15,7 @@
 
 <p align="center"><b>Archivo programado de categorías de cursos entre plataformas Moodle — borrados anunciados y cancelables.</b></p>
 
-<p align="center"><a href="README.md">🇬🇧 English</a> · <b>🇪🇸 Español</b></p>
+<p align="center"><a href="README.md">🇬🇧 English</a> · <b>🇪🇸 Español</b> · <a href="README.ca.md">Català</a></p>
 
 El Gestor de transferencias de cursos automatiza el archivo anual de categorías
 sobre [Course Transfer](https://github.com/3iPunt/moodle-local_coursetransfer):
@@ -69,17 +69,38 @@ en que ocurre.
 
 ## ⚙️ Cómo funciona
 
-- Una **tarea** define: la plataforma origen, qué categoría traer (por un patrón
-  de idnumber con `{YEAR}`/`{PREVYEAR}`, de modo que rota sola cada año), la
-  categoría de archivo de destino, cuándo se ejecuta y las retenciones.
-- En la fecha programada, la tarea resuelve el patrón contra el origen y pide a
-  Course Transfer que restaure la categoría; después la recoloca bajo la
-  categoría de archivo elegida.
+- Una **tarea** define: la plataforma origen, una **máscara de nombre** que
+  reconoce las categorías anuales, la categoría de archivo de destino, cuándo se
+  ejecuta y las dos ventanas de retención.
+- **Rota sola.** La máscara no es una categoría: reconoce toda la serie. En la
+  ejecución del curso A la tarea archiva A−P y borra definitivamente A−P−V,
+  donde **P** son los cursos que se quedan en producción y **V** los que se
+  guardan en el archivo. Nadie edita la tarea en septiembre.
+
+  | Máscara | Reconoce | Marcadores |
+  |---|---|---|
+  | `CAT-{YEAR}-{NEXTYEAR}` | `CAT-2025-2026` | años de cuatro cifras |
+  | `CAT-{YEAR}-{NEXTYY}` | `CAT-2025-26` | mixto |
+  | `CAT-{YY}-{NEXTYY}` | `CAT-25-26` | años de dos cifras |
+  | `SJD{YEAR}` | `SJD2025` | un solo año |
+  | `{ANY}-{YEAR}-{NEXTYEAR}` | `GINF-2025-2026`, `MED-2025-2026` | una tarea, todos los grados |
+
+  Con P=2 y V=4, la ejecución de 2027/28 deja en producción 2027/28 y 2026/27,
+  mantiene cuatro cursos en el archivo y borra definitivamente 2021/22. El
+  asistente y la **vista de ciclo de vida** (`task.php?id=N`) proyectan esa
+  tabla seis ejecuciones hacia delante, para no tener que calcularlo de cabeza.
+- En la fecha programada la tarea lee las categorías del origen, elige el curso
+  que se ha salido de la ventana de producción y pide a Course Transfer que lo
+  restaure; después lo recoloca bajo la categoría de archivo elegida.
 - Una restauración solo está **completada** cuando Course Transfer lo confirma;
   ahí empieza la cuenta atrás de la retención.
 - Antes de borrar en el origen se envía un **aviso previo** (días configurables)
   y se comprueba que la copia archivada está realmente ahí. Si no lo está, el
   borrado se **retiene** y se informa, en lugar de ejecutarse.
+- Las categorías que llegaron al archivo **sin** la tarea son invisibles para el
+  podado a propósito: es lo que protege el contenido ajeno. Adoptar una para que
+  la tarea pueda borrarla es una decisión explícita, auditada y reversible desde
+  la vista de ciclo de vida.
 - Todo es **asíncrono**: depende del **cron** de Moodle en las dos plataformas,
   así que el cron debe estar corriendo en ambas.
 
@@ -111,6 +132,12 @@ transferencias de cursos**:
 | **Días de aviso antes de borrar en el origen** | Con cuánta antelación se envía el aviso previo cancelable antes de un borrado programado. Por defecto: 7. |
 | **Días de gracia antes de podar el archivo** | Tiempo entre el anuncio de los candidatos al podado y su borrado, para poder excluirlos. Por defecto: 7. |
 | **Pausar todos los borrados (freno de emergencia)** | Mientras está activo no se ejecuta ningún borrado ni podado y sus fechas se van posponiendo, de modo que quitar la pausa nunca provoca un atasco. Las restauraciones no se ven afectadas. |
+| **Mes de inicio del curso académico** | Se usa para saber qué curso está en marcha cuando se ejecuta una tarea. Antes de ese mes el curso en marcha sigue siendo el anterior: en mayo de 2026 el curso es 2025/26. Por defecto: septiembre. |
+| **Máximo de categorías archivadas por ejecución** | Tope para que un curso atrasado no inunde el origen de restauraciones simultáneas. |
+
+Las ventanas de retención (**cursos en producción** y **cursos en el archivo**)
+son de cada tarea, no del sitio: distintos orígenes pueden guardar distinta
+cantidad de historia.
 
 Los canales de aviso se gestionan con las preferencias de notificación estándar
 de Moodle, por sitio y por usuario.

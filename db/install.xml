@@ -10,11 +10,15 @@
                 <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
                 <FIELD NAME="originsiteid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
                        COMMENT="FK to local_coursetransfer_origin.id"/>
-                <FIELD NAME="categorypattern" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="categorypattern" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"
+                       COMMENT="Naming mask that recognises the yearly categories, e.g. CAT-{YEAR}-{NEXTYEAR}"/>
                 <FIELD NAME="targetcategoryid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
                 <FIELD NAME="cronexpression" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false"/>
                 <FIELD NAME="retentiondays" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="30" SEQUENCE="false"/>
-                <FIELD NAME="destinationkeepyears" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="4" SEQUENCE="false"/>
+                <FIELD NAME="originkeepyears" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="2" SEQUENCE="false"
+                       COMMENT="Academic years kept in the origin (P): anything older is archived"/>
+                <FIELD NAME="destinationkeepyears" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="4" SEQUENCE="false"
+                       COMMENT="Academic years kept in the local archive (V): anything older is pruned"/>
                 <FIELD NAME="restoreuserdata" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
                 <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"/>
                 <FIELD NAME="usercreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
@@ -74,6 +78,26 @@
                 <INDEX NAME="scheduleddeleteat_idx" UNIQUE="false" FIELDS="scheduleddeleteat"/>
                 <INDEX NAME="deletestatus_idx" UNIQUE="false" FIELDS="deletestatus"/>
                 <INDEX NAME="requestid_idx" UNIQUE="false" FIELDS="requestid"/>
+            </INDEXES>
+        </TABLE>
+
+        <TABLE NAME="local_ctm_adopted" COMMENT="Archive categories the plugin did not create but an admin put under its management (so the conservation policy prunes them)">
+            <FIELDS>
+                <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+                <FIELD NAME="taskid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="categoryid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+                <FIELD NAME="categoryname" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+                <FIELD NAME="adoptedby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+                       COMMENT="User who put the category under management"/>
+                <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+            </FIELDS>
+            <KEYS>
+                <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+                <KEY NAME="task_fk" TYPE="foreign" FIELDS="taskid" REFTABLE="local_ctm_tasks" REFFIELDS="id"/>
+            </KEYS>
+            <INDEXES>
+                <INDEX NAME="categoryid_idx" UNIQUE="false" FIELDS="categoryid"/>
+                <INDEX NAME="taskcategory_idx" UNIQUE="true" FIELDS="taskid,categoryid"/>
             </INDEXES>
         </TABLE>
 

@@ -1,0 +1,178 @@
+{{!
+    This file is part of Moodle - https://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_coursetransfermanager/task_view_page
+
+    Read-only lifecycle view of one task: the policy in force, the next run step
+    by step, the year by year projection, what is already scheduled, and the
+    archive categories the task does or does not manage.
+
+    Context variables required for this template:
+    * taskid int - task id
+    * headertitle string - task name
+    * policyline string - the rule in force, one line (carries markup)
+    * projection object - as policy_preview exports it (see lifecycle_table)
+    * timeline object - {items: [...]} for lifecycle_timeline
+    * agenda array - already scheduled items
+    * managed array, adoptable array - archive categories
+
+    Example context (json):
+    {
+      "taskid": 1, "headertitle": "Archivo anual", "enabled": true,
+      "policyline": "Máscara SJD{YEAR}", "retentiondays": 30,
+      "projection": {"valid": false}, "timeline": {"items": []},
+      "agenda": [], "managed": [], "adoptable": [],
+      "panel": "#", "settings": "#", "editurl": "#", "executionsurl": "#"
+    }
+}}
+<div class="local-coursetransfermanager ct-app" id="ctm-taskview" data-taskid="{{ taskid }}">
+
+    <div class="ct-hero">
+        {{> local_coursetransfermanager/components/page_header }}
+        <div class="ct-hero-side">
+            <a class="ct-btn ct-btn--secondary" href="{{ executionsurl }}">
+                <i class="fa fa-list-ul" aria-hidden="true"></i>
+                {{#str}} card_view_executions, local_coursetransfermanager {{/str}}
+            </a>
+            <a class="ct-btn ct-btn--primary" href="{{ editurl }}">
+                <i class="fa fa-pencil" aria-hidden="true"></i>
+                {{#str}} view_edit, local_coursetransfermanager {{/str}}
+            </a>
+        </div>
+    </div>
+
+    {{^enabled}}
+    <div class="ct-banner ct-banner--warning">
+        <i class="fa fa-pause-circle" aria-hidden="true"></i>
+        <span>{{#str}} view_next_none, local_coursetransfermanager {{/str}}</span>
+    </div>
+    {{/enabled}}
+
+    <section class="ct-card">
+        <h2 class="ct-section-title">{{#str}} view_policy, local_coursetransfermanager {{/str}}</h2>
+        <p class="ct-policyline">{{{ policyline }}}</p>
+        <div class="ct-taskcard-meta">
+            <div class="ct-taskcard-cell">
+                <span class="ct-eyebrow">{{#str}} card_origin, local_coursetransfermanager {{/str}}</span>
+                <span>{{#originhost}}{{{ originhost }}}{{/originhost}}{{^originhost}}{{#str}} originsitenotfound, local_coursetransfermanager {{/str}}{{/originhost}}</span>
+            </div>
+            <div class="ct-taskcard-cell">
+                <span class="ct-eyebrow">{{#str}} card_destination, local_coursetransfermanager {{/str}}</span>
+                <span>{{#target}}{{{ target }}}{{/target}}{{^target}}-{{/target}}</span>
+            </div>
+            <div class="ct-taskcard-cell">
+                <span class="ct-eyebrow">{{#str}} retentiondays, local_coursetransfermanager {{/str}}</span>
+                <span>{{ retentiondays }}</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="ct-card">
+        <h2 class="ct-section-title">{{#str}} view_lifecycle, local_coursetransfermanager {{/str}}</h2>
+        {{#projection}}
+            {{> local_coursetransfermanager/components/lifecycle_table }}
+        {{/projection}}
+    </section>
+
+    {{#hastimeline}}
+    <section class="ct-card">
+        <h2 class="ct-section-title">{{#str}} view_next, local_coursetransfermanager {{/str}}</h2>
+        {{#timeline}}
+            {{> local_coursetransfermanager/components/lifecycle_timeline }}
+        {{/timeline}}
+    </section>
+    {{/hastimeline}}
+
+    <section class="ct-card">
+        <h2 class="ct-section-title">{{#str}} view_agenda, local_coursetransfermanager {{/str}}</h2>
+        {{#hasagenda}}
+        <ul class="ct-viewlist">
+            {{#agenda}}
+            <li class="ct-viewlist-item">
+                <span class="ct-badge {{#isexecution}}ct-badge--success{{/isexecution}}{{#isdeletion}}ct-badge--pending{{/isdeletion}}{{#isprune}}ct-badge--error{{/isprune}}">{{ label }}</span>
+                <span class="ct-viewlist-main">{{ what }}</span>
+                <span class="ct-text-muted">{{ date }} · {{ relative }}</span>
+            </li>
+            {{/agenda}}
+        </ul>
+        <p class="ct-text-muted ct-viewlist-foot">
+            {{#str}} agenda_footer, local_coursetransfermanager {{/str}}
+            · <a href="{{ executionsurl }}">{{#str}} executions, local_coursetransfermanager {{/str}}</a>
+        </p>
+        {{/hasagenda}}
+        {{^hasagenda}}
+        <p class="ct-text-muted">{{#str}} view_agenda_none, local_coursetransfermanager {{/str}}</p>
+        {{/hasagenda}}
+    </section>
+
+    <section class="ct-card">
+        <h2 class="ct-section-title">{{#str}} view_archive, local_coursetransfermanager {{/str}}</h2>
+        {{#hasmanaged}}
+        <ul class="ct-viewlist">
+            {{#managed}}
+            <li class="ct-viewlist-item">
+                <span class="ct-badge ct-badge--neutral">{{ label }}</span>
+                <span class="ct-viewlist-main"><a href="{{ url }}">{{ name }}</a> <code>{{ idnumber }}</code></span>
+                <span class="ct-text-muted">{{ courses }}</span>
+                {{#adopted}}
+                <span class="ct-badge ct-badge--cancelled">{{#str}} view_adopted, local_coursetransfermanager {{/str}}</span>
+                <button type="button" class="ct-btn ct-btn--ghost ct-btn--sm" data-action="unadopt"
+                        data-categoryid="{{ id }}" data-categoryname="{{ name }}">
+                    {{#str}} view_unadopt, local_coursetransfermanager {{/str}}
+                </button>
+                {{/adopted}}
+            </li>
+            {{/managed}}
+        </ul>
+        {{/hasmanaged}}
+        {{^hasmanaged}}
+        <p class="ct-text-muted">{{#str}} view_archive_none, local_coursetransfermanager {{/str}}</p>
+        {{/hasmanaged}}
+    </section>
+
+    <section class="ct-card">
+        <h2 class="ct-section-title">{{#str}} view_adoptable, local_coursetransfermanager {{/str}}</h2>
+        <p class="ct-text-muted">{{#str}} view_adoptable_desc, local_coursetransfermanager {{/str}}</p>
+        {{#hasadoptable}}
+        <ul class="ct-viewlist" data-region="adoptable">
+            {{#adoptable}}
+            <li class="ct-viewlist-item" data-region="adoptable-item" data-categoryid="{{ id }}">
+                <span class="ct-badge ct-badge--neutral">{{ label }}</span>
+                <span class="ct-viewlist-main"><a href="{{ url }}">{{ name }}</a> <code>{{ idnumber }}</code></span>
+                <span class="ct-text-muted">{{ courses }}</span>
+                <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="adopt"
+                        data-categoryid="{{ id }}" data-categoryname="{{ name }}">
+                    <i class="fa fa-hand-paper-o" aria-hidden="true"></i>
+                    {{#str}} view_adopt, local_coursetransfermanager {{/str}}
+                </button>
+            </li>
+            {{/adoptable}}
+        </ul>
+        {{/hasadoptable}}
+        {{^hasadoptable}}
+        <p class="ct-text-muted">{{#str}} view_adoptable_none, local_coursetransfermanager {{/str}}</p>
+        {{/hasadoptable}}
+    </section>
+
+    {{> local_coursetransfermanager/components/page_nav }}
+</div>
+
+{{#js}}
+    require(['local_coursetransfermanager/task_view'], function(View) {
+        View.init('ctm-taskview');
+    });
+{{/js}}

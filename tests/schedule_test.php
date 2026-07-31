@@ -29,7 +29,7 @@ use local_coursetransfermanager\manager\schedule;
 final class schedule_test extends \advanced_testcase {
 
     /**
-     * The yearly USJ-style expression resolves to the exact next 1st of September.
+     * A yearly expression resolves to the exact next 1st of September.
      */
     public function test_next_yearly(): void {
         $from = mktime(12, 0, 0, 7, 28, 2026);

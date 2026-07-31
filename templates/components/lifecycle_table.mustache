@@ -1,0 +1,123 @@
+{{!
+    This file is part of Moodle - https://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_coursetransfermanager/components/lifecycle_table
+
+    Year by year projection of the retention policy: what stays in production,
+    what waits in the archive and what is deleted for good on each run. It is the
+    answer to "what will this task delete in four years?" without having to
+    imagine it (Nielsen 1: visibility of system status).
+
+    Context variables required for this template:
+    * valid boolean - false when the mask or the year counts are unusable
+    * currentlabel string - academic year running now
+    * totalyears int - years a course survives in total
+    * rows array - one per future run: label, iscurrent, production[], archive[], deleted[]
+
+    Example context (json):
+    {
+      "valid": true, "currentlabel": "2026/27", "totalyears": 6,
+      "rows": [{"label": "2026/27", "iscurrent": true,
+                "production": [{"label": "2026/27", "idnumber": "CAT-2026-2027", "exists": true}],
+                "archive": [{"label": "2024/25", "idnumber": "CAT-2024-2025", "exists": false}],
+                "deleted": [{"label": "2020/21", "idnumber": "CAT-2020-2021", "exists": false}]}]
+    }
+}}
+{{#valid}}
+<div class="ct-lifecycle">
+    <div class="ct-lifecycle-legend">
+        <span class="ct-lifecycle-key ct-lifecycle-key--production">
+            {{#str}} lc_production, local_coursetransfermanager {{/str}}
+        </span>
+        <span class="ct-lifecycle-key ct-lifecycle-key--archive">
+            {{#str}} lc_archive, local_coursetransfermanager {{/str}}
+        </span>
+        <span class="ct-lifecycle-key ct-lifecycle-key--deleted">
+            {{#str}} lc_deleted, local_coursetransfermanager {{/str}}
+        </span>
+        <span class="ct-text-muted ct-lifecycle-total">
+            {{#str}} lc_total, local_coursetransfermanager, {{ totalyears }} {{/str}}
+        </span>
+    </div>
+
+    <div class="ct-lifecycle-scroll">
+        <table class="ct-lifecycle-table">
+            <caption class="ct-lifecycle-caption">
+                {{#str}} lc_caption, local_coursetransfermanager, {{ currentlabel }} {{/str}}
+            </caption>
+            <thead>
+                <tr>
+                    <th scope="col">{{#str}} lc_run, local_coursetransfermanager {{/str}}</th>
+                    <th scope="col">{{#str}} lc_production, local_coursetransfermanager {{/str}}</th>
+                    <th scope="col">{{#str}} lc_archive, local_coursetransfermanager {{/str}}</th>
+                    <th scope="col">{{#str}} lc_deleted, local_coursetransfermanager {{/str}}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#rows}}
+                <tr class="{{#iscurrent}}ct-lifecycle-row--current{{/iscurrent}}">
+                    <th scope="row">
+                        {{ label }}
+                        {{#iscurrent}}
+                            <span class="ct-badge ct-badge--success">
+                                {{#str}} lc_next, local_coursetransfermanager {{/str}}
+                            </span>
+                        {{/iscurrent}}
+                    </th>
+                    <td>
+                        <ul class="ct-lifecycle-cells">
+                            {{#production}}
+                            <li class="ct-lifecycle-cell {{^exists}}ct-lifecycle-cell--projected{{/exists}}"
+                                title="{{ idnumber }}">{{ label }}</li>
+                            {{/production}}
+                        </ul>
+                    </td>
+                    <td>
+                        <ul class="ct-lifecycle-cells">
+                            {{#archive}}
+                            <li class="ct-lifecycle-cell {{^exists}}ct-lifecycle-cell--projected{{/exists}}"
+                                title="{{ idnumber }}">{{ label }}</li>
+                            {{/archive}}
+                            {{^archive}}<li class="ct-text-muted">—</li>{{/archive}}
+                        </ul>
+                    </td>
+                    <td>
+                        <ul class="ct-lifecycle-cells">
+                            {{#deleted}}
+                            <li class="ct-lifecycle-cell ct-lifecycle-cell--gone"
+                                title="{{ idnumber }}">{{ label }}</li>
+                            {{/deleted}}
+                            {{^deleted}}<li class="ct-text-muted">—</li>{{/deleted}}
+                        </ul>
+                    </td>
+                </tr>
+                {{/rows}}
+            </tbody>
+        </table>
+    </div>
+
+    <p class="ct-text-muted ct-lifecycle-foot">
+        {{#str}} lc_foot, local_coursetransfermanager {{/str}}
+    </p>
+</div>
+{{/valid}}
+{{^valid}}
+<div class="ct-banner ct-banner--danger">
+    <i class="fa fa-exclamation-circle" aria-hidden="true"></i>
+    <span>{{#str}} lc_invalid, local_coursetransfermanager {{/str}}</span>
+</div>
+{{/valid}}

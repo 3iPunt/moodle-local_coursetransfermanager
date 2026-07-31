@@ -25,11 +25,11 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_coursetransfermanager';
-$plugin->version = 2026073002;
+$plugin->version = 2026073105;
 $plugin->requires = 2024100700;
 $plugin->supported = [405, 501];
 $plugin->maturity = MATURITY_STABLE;
-$plugin->release = '2.0.0';
+$plugin->release = '2.1.0';
 $plugin->dependencies = [
     // HARD functional dependency on CourseTransfer 2.0.0: this platform needs
     // its request_completed event (real completion + R1 deletion lock) and the

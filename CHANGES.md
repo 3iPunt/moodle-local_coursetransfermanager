@@ -2,6 +2,68 @@
 
 All notable changes to this plugin. Versions follow [semantic versioning](https://semver.org).
 
+## 2.1.0 — 2026-07-31
+
+Automatic rotation by academic year. Until now the task pointed at *one*
+category and somebody had to edit it every September; from this release the
+pattern is a **naming mask** and two retention windows decide, on their own,
+what is archived and what is deleted for good on each run. **The task is never
+edited again.**
+
+### ⚠️ Breaking changes
+
+- **The category pattern is now a naming mask, not a regular expression.**
+  `{YEAR}` no longer means "the current year" but "the academic year this
+  category belongs to", and the mask must recognise the whole yearly series.
+  Existing patterns are migrated on upgrade: regex anchors (`^` `$`) are
+  stripped and `{PREVYEAR}-{YEAR}` becomes `{YEAR}-{NEXTYEAR}` (the starting
+  year must come first, or the whole policy would sit one year off).
+  `{PREVYEAR}` no longer exists.
+- **The legacy single-year path has been removed.** Every task rotates by
+  policy, so the `patternmode` column is dropped on upgrade. A task whose mask
+  carries no year placeholder now fails its run with a clear message instead of
+  silently archiving nothing.
+
+### Added
+
+- **Rotation policy per task.** Two settings decide everything: *academic years
+  kept in production* (P) and *years kept in the archive* (V). On a run of
+  academic year A the task archives A−P and deletes A−P−V for good, so a course
+  survives P+V years in total. Both are edited in the wizard, with presets.
+- **Naming mask placeholders**: `{YEAR}`, `{NEXTYEAR}`, `{YY}`, `{NEXTYY}` for
+  the year, plus `{ANY}` and `{DIGITS}` as wildcards so a single task can cover
+  several degrees (`{ANY}-{YEAR}-{NEXTYEAR}`). Two-year masks are checked for
+  consecutiveness, so `CAT-2025-2030` is never mistaken for a course.
+- **Lifecycle projection table** in the wizard and in the new task view: six
+  runs ahead, showing what stays in production, what waits in the archive and
+  what is deleted on each one. Recalculated live by the engine itself
+  (`policy_preview`), never by the browser, and it tells apart what exists today
+  from what is only projected.
+- **Task lifecycle view** (`task.php?id=N`, "View lifecycle" in the task menu):
+  the rule in force, the projection, the next run step by step with its real
+  dates, what is already scheduled, what the task manages in the archive, and
+  the categories it deliberately does not.
+- **Adoption of pre-existing archive categories.** Categories that reached the
+  archive without the task are invisible to the pruning by design — that is the
+  rule protecting foreign content. Adopting one is an explicit, audited and
+  reversible decision, scoped to the task's own archive category.
+- **Setting: month the academic year starts** (September by default). Before
+  that month the running course is still the previous one, so a run in May
+  behaves like the admin expects.
+- **"Test the mask in the origin"** now lists every yearly category the mask
+  recognises there, with its academic year and course count, and says *why* when
+  the origin does not answer instead of a generic failure.
+
+### Changed
+
+- The archive retention preview and the confirmation timeline use the real
+  formula (A−P−V). They previously derived the cutoff from the run date and
+  ignored the production window.
+- A rejected save now names the field that is wrong (`originkeepyears`,
+  `destinationkeepyears`, `retentiondays`) instead of a generic "retention".
+- Reading the origin's categories goes through CourseTransfer's own client, so
+  it authenticates exactly like every other cross-platform call.
+
 ## 2.0.0 — 2026-07-30
 
 First stable release. Complete redesign of the interface and a hardened

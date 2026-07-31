@@ -16,10 +16,11 @@
 
 namespace local_coursetransfermanager;
 
+use local_coursetransfermanager\manager\academic_year;
 use local_coursetransfermanager\manager\prune_manager;
 
 /**
- * Tests for the two-phase archive pruning (CTM-001 safety).
+ * Tests for the two-phase archive pruning and its safety rule.
  *
  * @package    local_coursetransfermanager
  * @copyright  2026 3iPunt (contacte@tresipunt.com)
@@ -29,26 +30,38 @@ use local_coursetransfermanager\manager\prune_manager;
 final class prune_manager_test extends \advanced_testcase {
 
     /**
-     * Seed a task, its archive parent and children categories.
+     * Seed a task, its archive parent and one category per lifecycle band.
      *
-     * @param int $keepyears Years kept in the archive.
-     * @return \stdClass {task, parent, managedold, managednew, foreign}
+     * The years are derived from the policy, never hardcoded, so the fixture
+     * follows the model: production keeps the P newest courses, the archive the
+     * V before those, and anything older than A−P−V is a pruning candidate.
+     *
+     * @param int $originkeep Academic years kept in production (P).
+     * @param int $keepyears Academic years kept in the archive (V).
+     * @return \stdClass {task, parent, managedold, managedmid, managednew, foreign, years}
      */
-    private function seed(int $keepyears = 4): \stdClass {
+    private function seed(int $originkeep = 2, int $keepyears = 4): \stdClass {
         global $DB;
 
         $generator = $this->getDataGenerator();
         $parent = $generator->create_category(['name' => 'Archivo']);
-        $currentyear = (int)date('Y');
 
-        // Two manager-created children (tracked via destinationcategoryid) and a foreign one.
+        $current = academic_year::current_year();
+        // The first year that has outlived the whole policy: it must be pruned.
+        $prunable = $current - $originkeep - $keepyears;
+        // Still inside the archive window: out of production, but NOT prunable.
+        $middle = $prunable + 1;
+
         $managedold = $generator->create_category([
-            'name' => 'Viejo', 'parent' => $parent->id, 'idnumber' => 'SJD' . ($currentyear - $keepyears - 1),
+            'name' => 'Fuera de política', 'parent' => $parent->id, 'idnumber' => 'SJD' . $prunable,
+        ]);
+        $managedmid = $generator->create_category([
+            'name' => 'En archivo', 'parent' => $parent->id, 'idnumber' => 'SJD' . $middle,
         ]);
         $managednew = $generator->create_category([
-            'name' => 'Nuevo', 'parent' => $parent->id, 'idnumber' => 'SJD' . $currentyear,
+            'name' => 'Curso actual', 'parent' => $parent->id, 'idnumber' => 'SJD' . $current,
         ]);
-        // CTM-001 trap: a code that LOOKS old ("1042") in a category the manager never created.
+        // Trap: a code that LOOKS old ("1042") in a category the manager never created.
         $foreign = $generator->create_category([
             'name' => 'Ajena', 'parent' => $parent->id, 'idnumber' => 'MED1042',
         ]);
@@ -58,11 +71,13 @@ final class prune_manager_test extends \advanced_testcase {
             'type' => 'restore_category', 'name' => 'Tarea', 'originsiteid' => 1,
             'categorypattern' => 'SJD{YEAR}', 'targetcategoryid' => $parent->id,
             'cronexpression' => '0 2 1 9 *', 'retentiondays' => 30,
+            'originkeepyears' => $originkeep,
             'destinationkeepyears' => $keepyears, 'restoreuserdata' => 0, 'enabled' => 1,
             'usercreated' => 2, 'notifylevel' => 'full',
             'timecreated' => $now, 'timemodified' => $now,
         ]);
-        foreach ([$managedold, $managednew] as $category) {
+        // Manager-created is tracked via destinationcategoryid on the executions.
+        foreach ([$managedold, $managedmid, $managednew] as $category) {
             $DB->insert_record('local_ctm_executions', (object)[
                 'taskid' => $taskid, 'status' => 'completed', 'manualrun' => 0,
                 'destinationcategoryid' => $category->id,
@@ -72,22 +87,14 @@ final class prune_manager_test extends \advanced_testcase {
 
         return (object)[
             'task' => $DB->get_record('local_ctm_tasks', ['id' => $taskid]),
-            'parent' => $parent, 'managedold' => $managedold,
+            'parent' => $parent, 'managedold' => $managedold, 'managedmid' => $managedmid,
             'managednew' => $managednew, 'foreign' => $foreign,
+            'years' => (object)['current' => $current, 'middle' => $middle, 'prunable' => $prunable],
         ];
     }
 
-    /**
-     * The strict year extraction never mistakes arbitrary codes for years.
-     */
-    public function test_extract_year_is_strict(): void {
-        $this->assertNull(prune_manager::extract_year('MED1042'));
-        $this->assertNull(prune_manager::extract_year('20256'));
-        $this->assertNull(prune_manager::extract_year('GINF'));
-        $this->assertSame(2026, prune_manager::extract_year('SJD2026'));
-        $this->assertSame(2026, prune_manager::extract_year('2025-2026'));
-        $this->assertSame(2026, prune_manager::extract_year('A2026B2024'));
-    }
+    // Year recognition now lives in academic_year (see academic_year_test):
+    // the mask decides, so a code like MED1042 is never read as a year.
 
     /**
      * Detection announces ONLY manager-created categories older than the cutoff.
@@ -100,10 +107,22 @@ final class prune_manager_test extends \advanced_testcase {
         $seed = $this->seed();
         $announced = prune_manager::detect(time(), 7);
 
+        // Only the year that outlived the whole policy (A−P−V).
         $this->assertCount(1, $announced);
         $this->assertSame((int)$seed->managedold->id, (int)$announced[0]->categoryid);
-        // Neither the recent managed one nor the foreign MED1042 are candidates.
+        // And it is the year the policy says, not just "some old category".
+        $this->assertSame('SJD' . $seed->years->prunable,
+            $DB->get_field('course_categories', 'idnumber', ['id' => $announced[0]->categoryid]));
+        // The one still inside the archive window is NOT a candidate: being out
+        // of production is not the same as being out of the archive.
         $this->assertSame(1, $DB->count_records('local_ctm_prune'));
+        $this->assertFalse($DB->record_exists('local_ctm_prune',
+            ['categoryid' => $seed->managedmid->id]));
+        // Neither the current course nor the foreign MED1042 are candidates.
+        $this->assertFalse($DB->record_exists('local_ctm_prune',
+            ['categoryid' => $seed->managednew->id]));
+        $this->assertFalse($DB->record_exists('local_ctm_prune',
+            ['categoryid' => $seed->foreign->id]));
 
         // A second detection pass does not re-announce the live candidate.
         $this->assertCount(0, prune_manager::detect(time(), 7));
@@ -131,9 +150,36 @@ final class prune_manager_test extends \advanced_testcase {
         $this->assertSame('done', $results[0]->outcome);
         $this->assertFalse($DB->record_exists('course_categories', ['id' => $seed->managedold->id]));
 
-        // The foreign category and the recent one are untouched (CTM-001).
+        // The foreign category, the recent one and the one still inside the
+        // archive window are untouched.
         $this->assertTrue($DB->record_exists('course_categories', ['id' => $seed->foreign->id]));
         $this->assertTrue($DB->record_exists('course_categories', ['id' => $seed->managednew->id]));
+        $this->assertTrue($DB->record_exists('course_categories', ['id' => $seed->managedmid->id]));
+    }
+
+    /**
+     * Widening the archive window protects a year that was already prunable:
+     * the policy decides on every pass, it is not frozen at creation time.
+     */
+    public function test_policy_decides_on_every_pass(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        // With P=2 and V=4 the oldest year is prunable...
+        $seed = $this->seed(2, 4);
+        $this->expectOutputRegex('/candidate/');
+        $this->assertCount(1, prune_manager::detect(time(), 7));
+
+        // ...and one more year of archive takes it out of range again.
+        $DB->delete_records('local_ctm_prune', []);
+        $DB->set_field('local_ctm_tasks', 'destinationkeepyears', 5, ['id' => $seed->task->id]);
+        $this->assertCount(0, prune_manager::detect(time(), 7));
+
+        // Shrinking production has the same effect: fewer years in production
+        // means the archive window starts later.
+        $DB->set_field('local_ctm_tasks', 'destinationkeepyears', 4, ['id' => $seed->task->id]);
+        $DB->set_field('local_ctm_tasks', 'originkeepyears', 3, ['id' => $seed->task->id]);
+        $this->assertCount(0, prune_manager::detect(time(), 7));
     }
 
     /**

@@ -107,10 +107,11 @@ class task_wizard_page implements renderable, templatable {
             'taskid' => $isedit ? (int)$this->task->id : 0,
             'name' => $isedit ? $this->task->name : '',
             'originsiteid' => $isedit ? (int)$this->task->originsiteid : 0,
-            'categorypattern' => $isedit ? $this->task->categorypattern : '^{PREVYEAR}-{YEAR}$',
+            'categorypattern' => $isedit ? $this->task->categorypattern : '{YEAR}-{NEXTYEAR}',
             'targetcategory' => $this->context->target ?? null,
             'cronexpression' => $isedit ? $this->task->cronexpression : '0 2 1 9 *',
             'retentiondays' => $isedit ? (int)$this->task->retentiondays : 30,
+            'originkeepyears' => $isedit ? (int)$this->task->originkeepyears : 2,
             'destinationkeepyears' => $isedit ? (int)$this->task->destinationkeepyears : 4,
             'restoreuserdata' => $isedit ? (bool)$this->task->restoreuserdata : true,
             'notifylevel' => $isedit ? ($this->task->notifylevel ?? 'full') : 'full',
@@ -118,6 +119,8 @@ class task_wizard_page implements renderable, templatable {
             'creatorname' => $this->context->creatorname ?? '',
             'warningdays' => (int)($this->context->warningdays ?? 7),
             'gracedays' => (int)($this->context->gracedays ?? 7),
+            'startmonth' => (int)($this->context->startmonth ?? 9),
+            'currentyear' => (int)($this->context->currentyear ?? (int)date('Y')),
         ];
         $data->configjson = json_encode($config);
 

@@ -1,4 +1,4 @@
-<!-- English version. Versión en español: README.es.md -->
+<!-- English version. Versión en español: README.es.md · Versió en català: README.ca.md -->
 <p align="center">
   <img src="pix/logo.png" alt="" width="280">
 </p>
@@ -15,7 +15,7 @@
 
 <p align="center"><b>Scheduled archiving of course categories between Moodle platforms — announced and cancellable deletions.</b></p>
 
-<p align="center"><b>🇬🇧 English</b> · <a href="README.es.md">🇪🇸 Español</a></p>
+<p align="center"><b>🇬🇧 English</b> · <a href="README.es.md">🇪🇸 Español</a> · <a href="README.ca.md">Català</a></p>
 
 Course Transfer Manager automates the yearly archiving of course categories on
 top of [Course Transfer](https://github.com/3iPunt/moodle-local_coursetransfer):
@@ -67,18 +67,38 @@ moment it happens.
 
 ## ⚙️ How it works
 
-- A **task** defines: the origin platform, which category to bring (by an
-  idnumber pattern with `{YEAR}`/`{PREVYEAR}` placeholders, so it rotates on its
-  own every year), the destination archive category, when it runs, and the
-  retentions.
-- On the scheduled date the task resolves the pattern against the origin and
-  asks Course Transfer to restore the category, then files it under the chosen
-  archive category.
+- A **task** defines: the origin platform, a **naming mask** that recognises the
+  yearly categories, the destination archive category, when it runs, and the two
+  retention windows.
+- **It rotates on its own.** The mask is not one category: it recognises the
+  whole series. On a run of academic year A the task archives A−P and deletes
+  A−P−V for good, where **P** is the years kept in production and **V** the
+  years kept in the archive. Nobody edits the task in September.
+
+  | Mask | Recognises | Placeholders |
+  |---|---|---|
+  | `CAT-{YEAR}-{NEXTYEAR}` | `CAT-2025-2026` | four-digit years |
+  | `CAT-{YEAR}-{NEXTYY}` | `CAT-2025-26` | mixed |
+  | `CAT-{YY}-{NEXTYY}` | `CAT-25-26` | two-digit years |
+  | `SJD{YEAR}` | `SJD2025` | a single year |
+  | `{ANY}-{YEAR}-{NEXTYEAR}` | `GINF-2025-2026`, `MED-2025-2026` | one task, every degree |
+
+  With P=2 and V=4, the run of 2027/28 keeps 2027/28 and 2026/27 in production,
+  holds four years in the archive, and deletes 2021/22 for good. The wizard and
+  the **task lifecycle view** (`task.php?id=N`) project that table six runs
+  ahead, so nothing has to be worked out in your head.
+- On the scheduled date the task reads the origin's categories, picks the year
+  that has outstayed the production window and asks Course Transfer to restore
+  it, then files it under the chosen archive category.
 - A restoration is only **complete** when Course Transfer says so; that is when
   the retention countdown starts.
 - Before deleting in the origin the plugin sends an **advance notice** (days
   configurable) and checks that the archived copy is really there. If it is not,
   the deletion is **held** and reported instead of executed.
+- Categories that reached the archive **without** the task are invisible to the
+  pruning by design — that is what protects foreign content. Adopting one so the
+  task may delete it is an explicit, audited and reversible decision from the
+  lifecycle view.
 - Everything is **asynchronous**: it relies on Moodle **cron** on both
   platforms, so cron must be running on each side.
 
@@ -109,6 +129,12 @@ In **Site administration › Plugins › Local plugins › Course Transfer Manag
 | **Days of notice before deleting in the origin** | How long before a scheduled deletion the cancellable advance notice is sent. Default: 7. |
 | **Grace days before pruning the archive** | Time between announcing the pruning candidates and deleting them, so they can be excluded. Default: 7. |
 | **Pause every deletion (emergency switch)** | While active, no deletion or pruning runs and their due dates keep sliding forward, so lifting the pause never triggers a backlog. Restorations are unaffected. |
+| **Month the academic year starts** | Used to know which course is running when a task executes. Before that month the running course is still the previous one: in May 2026 the course is 2025/26. Default: September. |
+| **Maximum categories archived per run** | Cap so a delayed year cannot flood the origin with simultaneous restorations. |
+
+The retention windows (**years kept in production** and **years kept in the
+archive**) belong to each task, not to the site: different origins can keep
+different amounts of history.
 
 Notification channels are managed with Moodle's standard notification
 preferences, per site and per user.

@@ -112,7 +112,11 @@
                     <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="insert-token"
                             data-token="{YEAR}" data-region="token-year"></button>
                     <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="insert-token"
-                            data-token="{PREVYEAR}" data-region="token-prevyear"></button>
+                            data-token="{NEXTYEAR}" data-region="token-nextyear"></button>
+                    <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="insert-token"
+                            data-token="{YY}" data-region="token-yy"></button>
+                    <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="insert-token"
+                            data-token="{NEXTYY}" data-region="token-nextyy"></button>
                 </div>
             </div>
 
@@ -224,6 +228,24 @@
                 <p class="ct-text-muted">{{#str}} wz_s4_desc, local_coursetransfermanager {{/str}}</p>
             </div>
 
+            <fieldset class="ct-retention ct-retention--policy">
+                <legend class="ct-retention-title">{{#str}} wz_ret_policy, local_coursetransfermanager {{/str}}</legend>
+                <p class="ct-text-muted">{{#str}} wz_ret_policy_desc, local_coursetransfermanager {{/str}}</p>
+                <div class="ct-field">
+                    <label class="ct-field-label" for="ctm-originkeep">{{#str}} originkeepyears, local_coursetransfermanager {{/str}}</label>
+                    <div class="ct-field-row">
+                        <input class="ct-input ct-input--num" type="number" id="ctm-originkeep" min="1" max="20"
+                               data-field="originkeepyears">
+                        <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="preset-originkeep" data-years="1">1</button>
+                        <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="preset-originkeep" data-years="2">2</button>
+                        <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="preset-originkeep" data-years="3">3</button>
+                        <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="preset-originkeep" data-years="5">5</button>
+                    </div>
+                    <p class="ct-field-help">{{#str}} originkeepyears_help, local_coursetransfermanager {{/str}}</p>
+                </div>
+                <div class="ct-preview" data-region="ret-policy-box"></div>
+            </fieldset>
+
             <fieldset class="ct-retention ct-retention--origin">
                 <legend class="ct-retention-title">{{#str}} wz_ret_origin, local_coursetransfermanager {{/str}}</legend>
                 <p class="ct-text-muted" data-region="ret-origin-desc"></p>
@@ -254,6 +276,12 @@
                            data-field="destinationkeepyears">
                 </div>
                 <div class="ct-preview" data-region="ret-archive-box"></div>
+            </fieldset>
+
+            <fieldset class="ct-retention">
+                <legend class="ct-retention-title">{{#str}} wz_lifecycle, local_coursetransfermanager {{/str}}</legend>
+                <p class="ct-text-muted">{{#str}} wz_lifecycle_desc, local_coursetransfermanager {{/str}}</p>
+                <div data-region="lifecycle-table" role="status" aria-live="polite"></div>
             </fieldset>
 
             <fieldset class="ct-retention">

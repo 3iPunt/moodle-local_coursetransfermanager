@@ -162,6 +162,16 @@ class task_manager {
                 }
             }
             $task->originhost = $hosts[(int)$task->originsiteid];
+
+            // The academic year this task will archive next, resolved through its mask.
+            $mask = rotation::mask($task);
+            $task->targetidnumber = null;
+            if ($mask) {
+                $reference = !empty($task->nextruntime) ? (int)$task->nextruntime : time();
+                $task->targetidnumber = academic_year::example_for($mask,
+                    rotation::archive_threshold($task, $reference));
+            }
+
             $task->targetcategoryname = null;
             if (!empty($task->targetcategoryid)) {
                 $category = core_course_category::get((int)$task->targetcategoryid, IGNORE_MISSING);
@@ -228,6 +238,9 @@ class task_manager {
         $record->targetcategoryid = (int)$data['targetcategoryid'];
         $record->cronexpression = $cronexpression;
         $record->retentiondays = (int)($data['retentiondays'] ?? 30);
+        // Both retention windows must survive an edit: dropping one silently
+        // would change what the task deletes without anybody asking for it.
+        $record->originkeepyears = (int)($data['originkeepyears'] ?? $record->originkeepyears);
         $record->destinationkeepyears = (int)($data['destinationkeepyears'] ?? 4);
         $record->restoreuserdata = !empty($data['restoreuserdata']) ? 1 : 0;
         $record->enabled = !empty($data['enabled']) ? 1 : 0;
@@ -313,24 +326,6 @@ class task_manager {
      */
     public static function compute_previous_run(string $cronexpression, int $reference): ?int {
         return schedule::previous($cronexpression, $reference);
-    }
-
-    /**
-     * Replace pattern placeholders with the current academic year boundaries.
-     *
-     * @param string $pattern
-     * @param int|null $time Reference time (defaults to now).
-     * @return string
-     */
-    public static function resolve_pattern(string $pattern, ?int $time = null): string {
-        $year = (int)date('Y', $time ?? time());
-        $prevyear = $year - 1;
-
-        return str_replace(
-            ['{YEAR}', '{PREVYEAR}'],
-            [$year, $prevyear],
-            $pattern
-        );
     }
 
     /**
@@ -492,7 +487,13 @@ class task_manager {
     }
 
     /**
-     * Restore the remote category that matches the task pattern.
+     * Archive whatever the task has to archive on this run.
+     *
+     * In rotation mode the conservation policy decides: every category of the
+     * origin that has outstayed its years in production is archived, oldest
+     * first and capped per execution so a catch-up does not saturate both
+     * platforms. In legacy mode (tasks created before 2.1) the single-year
+     * pattern is resolved as before.
      *
      * @param object $task
      * @param bool $manualrun True when launched via "run now".
@@ -501,32 +502,56 @@ class task_manager {
      * @throws dml_exception
      */
     private function process_task(object $task, bool $manualrun = false): void {
-        global $USER;
-
         mtrace('Processing task: ' . $task->name . ($manualrun ? ' (manual run)' : ''));
 
-        $resolvedpattern = self::resolve_pattern($task->categorypattern);
-        mtrace('Resolved pattern: ' . $resolvedpattern);
-
         $site = origin::site((int)$task->originsiteid);
-
         $this->verify_origin_sync($site);
 
-        $origincategory = self::get_remote_category_by_idnumber(
-            $site->host,
-            $site->token,
-            $resolvedpattern
-        );
-
-        $origincategoryid = (int)$origincategory['id'];
-        $origincategoryname = (string)($origincategory['name'] ?? '');
-        $origincategoryidnumber = (string)($origincategory['idnumber'] ?? $resolvedpattern);
-
-        if (!$origincategoryid) {
-            throw new moodle_exception('categorynotfound', 'local_coursetransfermanager');
+        if (!rotation::mask($task)) {
+            throw new moodle_exception('maskinvalid', 'local_coursetransfermanager');
         }
 
-        mtrace('Found origin category ID: ' . $origincategoryid);
+        $pending = rotation::to_archive($task);
+        if (empty($pending)) {
+            mtrace('Nothing to archive: no category in the origin has outstayed its '
+                . (int)$task->originkeepyears . ' year(s) in production.');
+            return;
+        }
+
+        $max = rotation::max_per_tick();
+        $batch = array_slice($pending, 0, $max);
+        mtrace('Policy: archive year <= ' . rotation::archive_threshold($task) . '. '
+            . count($pending) . ' pending, processing ' . count($batch) . ' this run.');
+
+        foreach ($batch as $category) {
+            $this->archive_category($task, $site, (int)$category->id, (string)$category->name,
+                (string)$category->idnumber, $manualrun);
+        }
+
+        if (count($pending) > count($batch)) {
+            mtrace('Remaining ' . (count($pending) - count($batch))
+                . ' category(ies) will be archived on the next run.');
+        }
+    }
+
+    /**
+     * Bring one origin category into the archive and schedule its removal.
+     *
+     * @param object $task Task record.
+     * @param stdClass $site Origin site.
+     * @param int $origincategoryid Category id in the origin.
+     * @param string $origincategoryname Category name in the origin.
+     * @param string $origincategoryidnumber Category idnumber in the origin.
+     * @param bool $manualrun True when launched via "run now".
+     * @return void
+     * @throws dml_exception
+     */
+    private function archive_category(object $task, stdClass $site, int $origincategoryid,
+            string $origincategoryname, string $origincategoryidnumber, bool $manualrun): void {
+        global $USER;
+
+        mtrace('Archiving origin category ID ' . $origincategoryid
+            . ' (' . $origincategoryidnumber . ')');
 
         $configuration = new configuration_category(
             1,
@@ -590,9 +615,10 @@ class task_manager {
     /**
      * Relocate the restored category under the destination parent and return its id.
      *
-     * The created category is resolved from the coursetransfer request row
-     * (CTM-003: idnumbers are not unique, so a global idnumber lookup broke
-     * with duplicates). The idnumber fallback only applies when unambiguous.
+     * The created category is resolved from the coursetransfer request row,
+     * because idnumbers are not unique and a global idnumber lookup breaks as
+     * soon as one is duplicated. The idnumber fallback only applies when
+     * it is unambiguous.
      * A relocation problem never fails the execution: the restore already
      * happened — it is logged and the category stays where it was created.
      *

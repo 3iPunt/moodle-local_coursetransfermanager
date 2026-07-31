@@ -256,7 +256,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
             $dbman->add_key($table, $key);
         }
 
-        // Drop the dead setting: nothing ever read remotekeepyears (CTM-002).
+        // Drop the dead setting: nothing ever read remotekeepyears.
         $field = new xmldb_field('remotekeepyears');
         if ($dbman->field_exists($table, $field)) {
             $dbman->drop_field($table, $field);
@@ -337,6 +337,80 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
         }
 
         upgrade_plugin_savepoint(true, 2026072800, 'local', 'coursetransfermanager');
+    }
+
+    // 2.1 rotation model: the pattern becomes a naming mask that recognises every
+    // yearly category, and a conservation policy (years kept in the origin and in
+    // the archive) decides what to archive and what to prune. Tasks no longer need
+    // editing every course.
+    if ($oldversion < 2026073100) {
+        $table = new xmldb_table('local_ctm_tasks');
+
+        // P — academic years kept in the origin platform.
+        $field = new xmldb_field('originkeepyears', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '2',
+            'retentiondays');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // The pattern becomes a naming MASK: it no longer resolves to one year, it
+        // recognises every yearly category. Existing patterns are normalised:
+        // - regex anchors (^ $) were meaningful for the old exact match; as a mask
+        //   they would be literal characters, so they go.
+        // - {PREVYEAR}-{YEAR} described "course starting the previous year"; as a
+        //   mask the starting year must be the first one, hence {YEAR}-{NEXTYEAR}.
+        //   Without this the whole policy would sit one year off.
+        foreach ($DB->get_records('local_ctm_tasks', null, '', 'id, categorypattern') as $task) {
+            $mask = (string) $task->categorypattern;
+            $mask = trim($mask);
+            $mask = preg_replace('/^\^/', '', $mask);
+            $mask = preg_replace('/\$$/', '', $mask);
+            $mask = str_replace('{PREVYEAR}-{YEAR}', '{YEAR}-{NEXTYEAR}', $mask);
+            $mask = str_replace('{PREVYEAR}/{YEAR}', '{YEAR}/{NEXTYEAR}', $mask);
+            if ($mask !== (string) $task->categorypattern) {
+                $DB->set_field('local_ctm_tasks', 'categorypattern', $mask, ['id' => $task->id]);
+            }
+        }
+
+        upgrade_plugin_savepoint(true, 2026073100, 'local', 'coursetransfermanager');
+    }
+
+    // The legacy single-year path was dropped: every task rotates by policy, so the
+    // mode column no longer means anything.
+    if ($oldversion < 2026073101) {
+        $table = new xmldb_table('local_ctm_tasks');
+        $field = new xmldb_field('patternmode');
+        if ($dbman->field_exists($table, $field)) {
+            $dbman->drop_field($table, $field);
+        }
+
+        upgrade_plugin_savepoint(true, 2026073101, 'local', 'coursetransfermanager');
+    }
+
+    // Adoption: categories that reached the archive before the plugin existed are
+    // invisible to the pruning by design (the safety rule that protects foreign
+    // content). Adopting one is an explicit, audited decision.
+    if ($oldversion < 2026073102) {
+        $table = new xmldb_table('local_ctm_adopted');
+
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
+        $table->add_field('taskid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
+        $table->add_field('categoryid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
+        $table->add_field('categoryname', XMLDB_TYPE_CHAR, '255');
+        $table->add_field('adoptedby', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
+
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_key('task_fk', XMLDB_KEY_FOREIGN, ['taskid'], 'local_ctm_tasks', ['id']);
+
+        $table->add_index('categoryid_idx', XMLDB_INDEX_NOTUNIQUE, ['categoryid']);
+        $table->add_index('taskcategory_idx', XMLDB_INDEX_UNIQUE, ['taskid', 'categoryid']);
+
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        upgrade_plugin_savepoint(true, 2026073102, 'local', 'coursetransfermanager');
     }
 
     return true;

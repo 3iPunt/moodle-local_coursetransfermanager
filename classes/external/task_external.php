@@ -34,6 +34,7 @@ use core_external\external_single_structure;
 use core_external\external_value;
 use local_coursetransfermanager\manager\deletion_manager;
 use local_coursetransfermanager\manager\prune_manager;
+use local_coursetransfermanager\manager\rotation;
 use local_coursetransfermanager\manager\task_manager;
 
 /**
@@ -273,6 +274,88 @@ class task_external extends external_api {
         return new external_single_structure([
             'excluded' => new external_value(PARAM_BOOL, 'True when the candidate was excluded'),
             'audit' => new external_value(PARAM_TEXT, 'Who excluded and when, human readable'),
+        ]);
+    }
+
+    /**
+     * Parameters of set_adoption().
+     *
+     * @return external_function_parameters
+     */
+    public static function set_adoption_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'taskid' => new external_value(PARAM_INT, 'Task id'),
+            'categoryid' => new external_value(PARAM_INT, 'Archive category id'),
+            'adopt' => new external_value(PARAM_BOOL, 'True to adopt, false to stop managing'),
+        ]);
+    }
+
+    /**
+     * Put an archive category under this task's pruning, or take it out.
+     *
+     * Categories that reached the archive without the task are invisible to the
+     * pruning by design — that is the rule protecting foreign content. Adopting
+     * one is therefore an explicit, audited decision, never a side effect.
+     *
+     * @param int $taskid Task id.
+     * @param int $categoryid Archive category id.
+     * @param bool $adopt True to adopt, false to stop managing.
+     * @return array
+     */
+    public static function set_adoption(int $taskid, int $categoryid, bool $adopt): array {
+        global $USER;
+
+        $params = self::validate_parameters(self::set_adoption_parameters(), [
+            'taskid' => $taskid,
+            'categoryid' => $categoryid,
+            'adopt' => $adopt,
+        ]);
+        self::require_manager();
+
+        // Only a category the task could legitimately manage: never an arbitrary id.
+        $task = (new task_manager())->get_task($params['taskid']);
+        $allowed = false;
+        foreach (rotation::adoptable($task) as $candidate) {
+            if ((int) $candidate->id === $params['categoryid']) {
+                $allowed = true;
+                break;
+            }
+        }
+        foreach (rotation::managed_categories($task) as $managed) {
+            if ((int) $managed->id === $params['categoryid']) {
+                $allowed = true;
+                break;
+            }
+        }
+        if (!$allowed) {
+            throw new \moodle_exception('adoptnotallowed', 'local_coursetransfermanager');
+        }
+
+        if ($params['adopt']) {
+            rotation::adopt($params['taskid'], $params['categoryid'], (int) $USER->id);
+        } else {
+            rotation::unadopt($params['taskid'], $params['categoryid']);
+        }
+
+        return [
+            'adopted' => $params['adopt'],
+            'audit' => get_string($params['adopt'] ? 'adopted_by' : 'unadopted_by',
+                'local_coursetransfermanager', (object) [
+                    'name' => fullname($USER),
+                    'date' => userdate(time()),
+                ]),
+        ];
+    }
+
+    /**
+     * Return structure of set_adoption().
+     *
+     * @return external_single_structure
+     */
+    public static function set_adoption_returns(): external_single_structure {
+        return new external_single_structure([
+            'adopted' => new external_value(PARAM_BOOL, 'True when the task now manages it'),
+            'audit' => new external_value(PARAM_TEXT, 'Who decided and when, human readable'),
         ]);
     }
 }

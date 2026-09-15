@@ -81,8 +81,8 @@ final class executions {
 
         $sql = "SELECT e.id, e.taskid, t.name AS taskname, t.originsiteid,
                        e.origincategoryname, e.origincategoryidnumber, e.requestid, e.timecreated
-                  FROM {local_ctm_executions} e
-                  JOIN {local_ctm_tasks} t ON t.id = e.taskid
+                  FROM {local_coursetransfermanager_executions} e
+                  JOIN {local_coursetransfermanager_tasks} t ON t.id = e.taskid
                  WHERE $where
               ORDER BY e.timecreated DESC";
 
@@ -134,7 +134,9 @@ final class executions {
         }
 
         $wheresql = implode(' AND ', $where);
-        $base = "FROM {local_ctm_executions} e JOIN {local_ctm_tasks} t ON t.id = e.taskid WHERE $wheresql";
+        $base = "FROM {local_coursetransfermanager_executions} e
+                  JOIN {local_coursetransfermanager_tasks} t ON t.id = e.taskid
+                 WHERE $wheresql";
 
         $total = $DB->count_records_sql("SELECT COUNT(1) $base", $params);
         $rows = $DB->get_records_sql(
@@ -172,8 +174,8 @@ final class executions {
             }
             $prunerows = $DB->get_records_sql(
                 "SELECT p.id, p.taskid, t.name AS taskname, p.categoryname, p.status, p.timemodified
-                   FROM {local_ctm_prune} p
-                   JOIN {local_ctm_tasks} t ON t.id = p.taskid
+                   FROM {local_coursetransfermanager_prune} p
+                   JOIN {local_coursetransfermanager_tasks} t ON t.id = p.taskid
                   WHERE " . implode(' AND ', $pwhere) . "
                ORDER BY p.timemodified DESC",
                 $pparams,

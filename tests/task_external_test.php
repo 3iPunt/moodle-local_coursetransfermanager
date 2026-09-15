@@ -38,7 +38,7 @@ final class task_external_test extends \advanced_testcase {
         global $DB;
 
         $now = time();
-        $taskid = $DB->insert_record('local_ctm_tasks', (object)[
+        $taskid = $DB->insert_record('local_coursetransfermanager_tasks', (object)[
             'type' => 'restore_category', 'name' => 'Tarea', 'originsiteid' => 1,
             'categorypattern' => 'SJD{YEAR}', 'targetcategoryid' => 1,
             'cronexpression' => '0 2 1 9 *', 'retentiondays' => 30,
@@ -47,7 +47,7 @@ final class task_external_test extends \advanced_testcase {
             'timecreated' => $now, 'timemodified' => $now,
         ]);
         if ($withsuccess) {
-            $DB->insert_record('local_ctm_executions', (object)[
+            $DB->insert_record('local_coursetransfermanager_executions', (object)[
                 'taskid' => $taskid, 'status' => 'success', 'manualrun' => 0,
                 'timecreated' => $now, 'timemodified' => $now,
             ]);
@@ -78,7 +78,7 @@ final class task_external_test extends \advanced_testcase {
 
         $off = task_external::toggle($taskid, false);
         $this->assertFalse($off['enabled']);
-        $this->assertSame(0, (int)$DB->get_field('local_ctm_tasks', 'enabled', ['id' => $taskid]));
+        $this->assertSame(0, (int)$DB->get_field('local_coursetransfermanager_tasks', 'enabled', ['id' => $taskid]));
 
         $on = task_external::toggle($taskid, true);
         $this->assertTrue($on['enabled']);
@@ -112,7 +112,7 @@ final class task_external_test extends \advanced_testcase {
         $this->setAdminUser();
 
         $taskid = $this->seed();
-        $executionid = $DB->insert_record('local_ctm_executions', (object)[
+        $executionid = $DB->insert_record('local_coursetransfermanager_executions', (object)[
             'taskid' => $taskid, 'status' => 'success', 'manualrun' => 0,
             'origincategoryid' => 7, 'origincategoryname' => 'X',
             'scheduleddeleteat' => time() + 10 * DAYSECS,
@@ -125,7 +125,7 @@ final class task_external_test extends \advanced_testcase {
         $this->assertNotEmpty($result['audit']);
         $this->assertSame(
             deletion_manager::STATUS_CANCELLED,
-            $DB->get_field('local_ctm_executions', 'deletestatus', ['id' => $executionid])
+            $DB->get_field('local_coursetransfermanager_executions', 'deletestatus', ['id' => $executionid])
         );
     }
 
@@ -145,7 +145,7 @@ final class task_external_test extends \advanced_testcase {
         $elsewhere = $generator->create_category(['name' => 'Elsewhere', 'idnumber' => 'SJD2019']);
 
         $taskid = $this->seed();
-        $DB->set_field('local_ctm_tasks', 'targetcategoryid', $archive->id, ['id' => $taskid]);
+        $DB->set_field('local_coursetransfermanager_tasks', 'targetcategoryid', $archive->id, ['id' => $taskid]);
 
         // A category outside this task's archive is refused, not adopted.
         try {
@@ -153,7 +153,7 @@ final class task_external_test extends \advanced_testcase {
             $this->fail('Expected moodle_exception for a category outside the archive');
         } catch (\moodle_exception $e) {
             $this->assertFalse($DB->record_exists(
-                'local_ctm_adopted',
+                'local_coursetransfermanager_adopted',
                 ['taskid' => $taskid, 'categoryid' => $elsewhere->id]
             ));
         }
@@ -162,14 +162,14 @@ final class task_external_test extends \advanced_testcase {
         $this->assertTrue($result['adopted']);
         $this->assertNotEmpty($result['audit']);
         $this->assertTrue($DB->record_exists(
-            'local_ctm_adopted',
+            'local_coursetransfermanager_adopted',
             ['taskid' => $taskid, 'categoryid' => $yearly->id]
         ));
 
         $released = task_external::set_adoption($taskid, (int)$yearly->id, false);
         $this->assertFalse($released['adopted']);
         $this->assertFalse($DB->record_exists(
-            'local_ctm_adopted',
+            'local_coursetransfermanager_adopted',
             ['taskid' => $taskid, 'categoryid' => $yearly->id]
         ));
     }

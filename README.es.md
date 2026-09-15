@@ -6,8 +6,8 @@
 <h1 align="center">Gestor de transferencias de cursos</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.0.0-informational" alt="Versión">
-  <a href="https://moodle.org"><img src="https://img.shields.io/badge/Moodle-4.5%2B-orange?logo=moodle" alt="Moodle"></a>
+  <img src="https://img.shields.io/badge/version-2.1.1-informational" alt="Versión">
+  <a href="https://moodle.org"><img src="https://img.shields.io/badge/Moodle-4.5%20--%205.1-orange?logo=moodle" alt="Moodle"></a>
   <img src="https://img.shields.io/badge/PHP-8.1%2B-777BB4?logo=php&logoColor=white" alt="PHP">
   <img src="https://img.shields.io/badge/License-GPL--3.0-green" alt="Licencia">
   <a href="https://tresipunt.com"><img src="https://img.shields.io/badge/made%20by-Tresipunt-F84015" alt="Hecho por Tresipunt"></a>

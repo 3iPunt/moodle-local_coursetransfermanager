@@ -67,7 +67,7 @@ $pageobj = new executions_page(
     executions::get_history($filters, $page, $perpage),
     executions::get_counts($scopetaskid),
     $filters,
-    array_values($DB->get_records('local_ctm_tasks', null, 'name ASC', 'id, name')),
+    array_values($DB->get_records('local_coursetransfermanager_tasks', null, 'name ASC', 'id, name')),
     $page,
     $perpage,
     $now

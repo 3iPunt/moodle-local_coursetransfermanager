@@ -135,13 +135,13 @@ class task_manager {
 
         $sql = "SELECT t.*, latest.status AS laststatus, latest.timecreated AS lastrun,
                        latest.manualrun AS lastmanual, latest.errormessage AS lasterror
-                  FROM {local_ctm_tasks} t
+                  FROM {local_coursetransfermanager_tasks} t
              LEFT JOIN (
                     SELECT e.taskid, e.status, e.timecreated, e.manualrun, e.errormessage
-                      FROM {local_ctm_executions} e
+                      FROM {local_coursetransfermanager_executions} e
                       JOIN (
                             SELECT taskid, MAX(timecreated) AS maxt
-                              FROM {local_ctm_executions}
+                              FROM {local_coursetransfermanager_executions}
                           GROUP BY taskid
                       ) m ON m.taskid = e.taskid AND m.maxt = e.timecreated
              ) latest ON latest.taskid = t.id
@@ -215,7 +215,7 @@ class task_manager {
             'timemodified' => $now,
         ];
 
-        return $DB->insert_record('local_ctm_tasks', $record);
+        return $DB->insert_record('local_coursetransfermanager_tasks', $record);
     }
 
     /**
@@ -229,7 +229,7 @@ class task_manager {
     public function update_task(int $id, array $data): bool {
         global $DB;
 
-        $record = $DB->get_record('local_ctm_tasks', ['id' => $id], '*', MUST_EXIST);
+        $record = $DB->get_record('local_coursetransfermanager_tasks', ['id' => $id], '*', MUST_EXIST);
         $cronexpression = trim($data['cronexpression'] ?? $record->cronexpression);
 
         $record->name = $data['name'];
@@ -250,7 +250,7 @@ class task_manager {
         $record->nextruntime = schedule::next($cronexpression, time());
         $record->timemodified = time();
 
-        return $DB->update_record('local_ctm_tasks', $record);
+        return $DB->update_record('local_coursetransfermanager_tasks', $record);
     }
 
     /**
@@ -263,7 +263,7 @@ class task_manager {
      */
     public function get_task(int $id): object {
         global $DB;
-        return $DB->get_record('local_ctm_tasks', ['id' => $id], '*', MUST_EXIST);
+        return $DB->get_record('local_coursetransfermanager_tasks', ['id' => $id], '*', MUST_EXIST);
     }
 
     /**
@@ -275,9 +275,9 @@ class task_manager {
      */
     public function delete_task(int $id): bool {
         global $DB;
-        $DB->delete_records('local_ctm_executions', ['taskid' => $id]);
-        $DB->delete_records('local_ctm_prune', ['taskid' => $id]);
-        return $DB->delete_records('local_ctm_tasks', ['id' => $id]);
+        $DB->delete_records('local_coursetransfermanager_executions', ['taskid' => $id]);
+        $DB->delete_records('local_coursetransfermanager_prune', ['taskid' => $id]);
+        return $DB->delete_records('local_coursetransfermanager_tasks', ['id' => $id]);
     }
 
     /**
@@ -297,7 +297,7 @@ class task_manager {
             $task->nextruntime = schedule::next($task->cronexpression, time());
         }
         $task->timemodified = time();
-        $DB->update_record('local_ctm_tasks', $task);
+        $DB->update_record('local_coursetransfermanager_tasks', $task);
 
         return $task;
     }
@@ -339,7 +339,7 @@ class task_manager {
 
         $now = time();
         $tasks = $DB->get_records_select(
-            'local_ctm_tasks',
+            'local_coursetransfermanager_tasks',
             'enabled = 1 AND (nextruntime IS NULL OR nextruntime <= :now)',
             ['now' => $now]
         );
@@ -439,7 +439,7 @@ class task_manager {
         [$insql, $inparams] = $DB->get_in_or_equal([self::STATUS_SUCCESS, self::STATUS_COMPLETED], SQL_PARAMS_NAMED);
 
         return $DB->record_exists_select(
-            'local_ctm_executions',
+            'local_coursetransfermanager_executions',
             "taskid = :taskid AND status $insql AND timecreated >= :timefrom",
             array_merge($inparams, [
                 'taskid' => $task->id,
@@ -460,7 +460,7 @@ class task_manager {
 
         [$insql, $inparams] = $DB->get_in_or_equal([self::STATUS_SUCCESS, self::STATUS_COMPLETED], SQL_PARAMS_NAMED);
         $last = $DB->get_field_select(
-            'local_ctm_executions',
+            'local_coursetransfermanager_executions',
             'MAX(timecreated)',
             "taskid = :taskid AND status $insql",
             array_merge($inparams, ['taskid' => $task->id])
@@ -478,7 +478,7 @@ class task_manager {
      */
     private function advance_schedule(object $task, int $now): void {
         global $DB;
-        $DB->update_record('local_ctm_tasks', (object)[
+        $DB->update_record('local_coursetransfermanager_tasks', (object)[
             'id' => $task->id,
             'lastruntime' => $now,
             'nextruntime' => schedule::next($task->cronexpression, $now),
@@ -834,7 +834,7 @@ class task_manager {
             'timemodified' => time(),
         ];
 
-        return $DB->insert_record('local_ctm_executions', $record);
+        return $DB->insert_record('local_coursetransfermanager_executions', $record);
     }
 
     /**
@@ -866,7 +866,7 @@ class task_manager {
         $taskcache = [];
         $gettask = static function (int $taskid) use (&$taskcache, $DB): ?object {
             if (!array_key_exists($taskid, $taskcache)) {
-                $taskcache[$taskid] = $DB->get_record('local_ctm_tasks', ['id' => $taskid]) ?: null;
+                $taskcache[$taskid] = $DB->get_record('local_coursetransfermanager_tasks', ['id' => $taskid]) ?: null;
             }
             return $taskcache[$taskid];
         };

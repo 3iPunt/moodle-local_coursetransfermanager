@@ -153,7 +153,7 @@ final class health {
         $check->data->sites = [];
         try {
             $siteids = $DB->get_fieldset_select(
-                'local_ctm_tasks',
+                'local_coursetransfermanager_tasks',
                 'DISTINCT originsiteid',
                 'enabled = 1 AND originsiteid > 0'
             );

@@ -2,6 +2,39 @@
 
 All notable changes to this plugin. Versions follow [semantic versioning](https://semver.org).
 
+## 2.1.1 — 2026-09-15
+
+Housekeeping release required for publication. **No behaviour changes.**
+
+### Changed
+
+- **The four database tables now carry the component prefix.** They were named
+  `local_ctm_*`, an abbreviation that Moodle's own plugin validation rejects —
+  and one that was never needed, since the name limit is 53 characters and the
+  full names fit well within it:
+
+  | Before | Now |
+  |---|---|
+  | `local_ctm_tasks` | `local_coursetransfermanager_tasks` |
+  | `local_ctm_executions` | `local_coursetransfermanager_executions` |
+  | `local_ctm_adopted` | `local_coursetransfermanager_adopted` |
+  | `local_ctm_prune` | `local_coursetransfermanager_prune` |
+
+  **Existing data is preserved**: the upgrade step renames the tables, it does
+  not recreate them. It is guarded both ways, so re-running it, or installing
+  from scratch, does nothing.
+
+- **Continuous integration** on every push and pull request, running the full
+  `moodle-plugin-ci` suite across PHP 8.1 – 8.4, Moodle 4.5 and 5.1, and both
+  PostgreSQL and MariaDB.
+
+- The code now passes `moodle-plugin-ci` clean: Moodle Code Checker, PHPDoc
+  Checker, Validate, Upgrade savepoints, Mustache Lint and Grunt. This meant
+  sorting the language files, dropping the comments inside them, flattening
+  seventeen nested promise chains in the AMD modules, and replacing the
+  obsolete table attributes of the notification email with their CSS
+  equivalent.
+
 ## 2.1.0 — 2026-07-31
 
 Automatic rotation by academic year. Until now the task pointed at *one*

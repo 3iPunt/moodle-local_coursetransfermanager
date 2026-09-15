@@ -58,20 +58,20 @@ class provider implements
      * @return collection
      */
     public static function get_metadata(collection $collection): collection {
-        $collection->add_database_table('local_ctm_tasks', [
-            'usercreated' => 'privacy:metadata:local_ctm_tasks:usercreated',
-            'notifyrecipients' => 'privacy:metadata:local_ctm_tasks:notifyrecipients',
-        ], 'privacy:metadata:local_ctm_tasks');
+        $collection->add_database_table('local_coursetransfermanager_tasks', [
+            'usercreated' => 'privacy:metadata:local_coursetransfermanager_tasks:usercreated',
+            'notifyrecipients' => 'privacy:metadata:local_coursetransfermanager_tasks:notifyrecipients',
+        ], 'privacy:metadata:local_coursetransfermanager_tasks');
 
-        $collection->add_database_table('local_ctm_executions', [
-            'deletecancelledby' => 'privacy:metadata:local_ctm_executions:deletecancelledby',
-            'deletecancelledat' => 'privacy:metadata:local_ctm_executions:deletecancelledat',
-        ], 'privacy:metadata:local_ctm_executions');
+        $collection->add_database_table('local_coursetransfermanager_executions', [
+            'deletecancelledby' => 'privacy:metadata:local_coursetransfermanager_executions:deletecancelledby',
+            'deletecancelledat' => 'privacy:metadata:local_coursetransfermanager_executions:deletecancelledat',
+        ], 'privacy:metadata:local_coursetransfermanager_executions');
 
-        $collection->add_database_table('local_ctm_prune', [
-            'excludedby' => 'privacy:metadata:local_ctm_prune:excludedby',
-            'excludedat' => 'privacy:metadata:local_ctm_prune:excludedat',
-        ], 'privacy:metadata:local_ctm_prune');
+        $collection->add_database_table('local_coursetransfermanager_prune', [
+            'excludedby' => 'privacy:metadata:local_coursetransfermanager_prune:excludedby',
+            'excludedat' => 'privacy:metadata:local_coursetransfermanager_prune:excludedat',
+        ], 'privacy:metadata:local_coursetransfermanager_prune');
 
         return $collection;
     }
@@ -89,13 +89,13 @@ class provider implements
 
         $params = ['userid' => $userid, 'pattern' => '%,' . $userid . ',%'];
         $sql = "SELECT COUNT(1)
-                  FROM {local_ctm_tasks} t
+                  FROM {local_coursetransfermanager_tasks} t
                  WHERE t.usercreated = :userid
                     OR " . $DB->sql_like($DB->sql_concat("','", 't.notifyrecipients', "','"), ':pattern');
 
         $found = $DB->count_records_sql($sql, $params) > 0
-            || $DB->record_exists('local_ctm_executions', ['deletecancelledby' => $userid])
-            || $DB->record_exists('local_ctm_prune', ['excludedby' => $userid]);
+            || $DB->record_exists('local_coursetransfermanager_executions', ['deletecancelledby' => $userid])
+            || $DB->record_exists('local_coursetransfermanager_prune', ['excludedby' => $userid]);
 
         if ($found) {
             $contextlist->add_system_context();
@@ -119,25 +119,25 @@ class provider implements
 
         $userlist->add_from_sql(
             'usercreated',
-            'SELECT usercreated FROM {local_ctm_tasks} WHERE usercreated > 0',
+            'SELECT usercreated FROM {local_coursetransfermanager_tasks} WHERE usercreated > 0',
             []
         );
         $userlist->add_from_sql(
             'deletecancelledby',
-            'SELECT deletecancelledby FROM {local_ctm_executions} WHERE deletecancelledby IS NOT NULL',
+            'SELECT deletecancelledby FROM {local_coursetransfermanager_executions} WHERE deletecancelledby IS NOT NULL',
             []
         );
         $userlist->add_from_sql(
             'excludedby',
-            'SELECT excludedby FROM {local_ctm_prune} WHERE excludedby IS NOT NULL',
+            'SELECT excludedby FROM {local_coursetransfermanager_prune} WHERE excludedby IS NOT NULL',
             []
         );
 
         // Recipients are stored as a comma-separated list; expand them in PHP.
         $lists = $DB->get_fieldset_select(
-            'local_ctm_tasks',
+            'local_coursetransfermanager_tasks',
             'notifyrecipients',
-            $DB->sql_isnotempty('local_ctm_tasks', 'notifyrecipients', true, true)
+            $DB->sql_isnotempty('local_coursetransfermanager_tasks', 'notifyrecipients', true, true)
         );
         $recipients = [];
         foreach ($lists as $list) {
@@ -181,11 +181,11 @@ class provider implements
                 'name' => $task->name,
                 'timecreated' => transform::datetime($task->timecreated),
             ];
-        }, $DB->get_records('local_ctm_tasks', ['usercreated' => $userid], 'id', 'id, name, timecreated')));
+        }, $DB->get_records('local_coursetransfermanager_tasks', ['usercreated' => $userid], 'id', 'id, name, timecreated')));
 
         $params = ['pattern' => '%,' . $userid . ',%'];
         $data->notificationrecipientof = $DB->get_fieldset_select(
-            'local_ctm_tasks',
+            'local_coursetransfermanager_tasks',
             'name',
             $DB->sql_like($DB->sql_concat("','", 'notifyrecipients', "','"), ':pattern'),
             $params
@@ -197,7 +197,7 @@ class provider implements
                 'cancelledat' => transform::datetime($execution->deletecancelledat),
             ];
         }, $DB->get_records(
-            'local_ctm_executions',
+            'local_coursetransfermanager_executions',
             ['deletecancelledby' => $userid],
             'id',
             'id, origincategoryname, deletecancelledat'
@@ -208,7 +208,7 @@ class provider implements
                 'category' => (string) $candidate->categoryname,
                 'excludedat' => transform::datetime($candidate->excludedat),
             ];
-        }, $DB->get_records('local_ctm_prune', ['excludedby' => $userid], 'id', 'id, categoryname, excludedat')));
+        }, $DB->get_records('local_coursetransfermanager_prune', ['excludedby' => $userid], 'id', 'id, categoryname, excludedat')));
 
         writer::with_context($systemcontext)->export_data($subcontext, $data);
     }
@@ -230,10 +230,10 @@ class provider implements
             return;
         }
 
-        $DB->set_field_select('local_ctm_tasks', 'usercreated', 0, 'usercreated > 0');
-        $DB->set_field_select('local_ctm_tasks', 'notifyrecipients', null, '1 = 1');
-        $DB->set_field_select('local_ctm_executions', 'deletecancelledby', null, 'deletecancelledby IS NOT NULL');
-        $DB->set_field_select('local_ctm_prune', 'excludedby', null, 'excludedby IS NOT NULL');
+        $DB->set_field_select('local_coursetransfermanager_tasks', 'usercreated', 0, 'usercreated > 0');
+        $DB->set_field_select('local_coursetransfermanager_tasks', 'notifyrecipients', null, '1 = 1');
+        $DB->set_field_select('local_coursetransfermanager_executions', 'deletecancelledby', null, 'deletecancelledby IS NOT NULL');
+        $DB->set_field_select('local_coursetransfermanager_prune', 'excludedby', null, 'excludedby IS NOT NULL');
     }
 
     /**
@@ -275,14 +275,14 @@ class provider implements
     private static function anonymise_user(int $userid): void {
         global $DB;
 
-        $DB->set_field('local_ctm_tasks', 'usercreated', 0, ['usercreated' => $userid]);
-        $DB->set_field('local_ctm_executions', 'deletecancelledby', null, ['deletecancelledby' => $userid]);
-        $DB->set_field('local_ctm_prune', 'excludedby', null, ['excludedby' => $userid]);
+        $DB->set_field('local_coursetransfermanager_tasks', 'usercreated', 0, ['usercreated' => $userid]);
+        $DB->set_field('local_coursetransfermanager_executions', 'deletecancelledby', null, ['deletecancelledby' => $userid]);
+        $DB->set_field('local_coursetransfermanager_prune', 'excludedby', null, ['excludedby' => $userid]);
 
         // Remove the user from every comma-separated recipient list.
         $params = ['pattern' => '%,' . $userid . ',%'];
         $tasks = $DB->get_records_select(
-            'local_ctm_tasks',
+            'local_coursetransfermanager_tasks',
             $DB->sql_like($DB->sql_concat("','", 'notifyrecipients', "','"), ':pattern'),
             $params,
             'id',
@@ -293,7 +293,7 @@ class provider implements
                 return (int) $id > 0 && (int) $id !== $userid;
             });
             $DB->set_field(
-                'local_ctm_tasks',
+                'local_coursetransfermanager_tasks',
                 'notifyrecipients',
                 $ids ? implode(',', $ids) : null,
                 ['id' => $task->id]

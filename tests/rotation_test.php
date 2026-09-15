@@ -168,7 +168,7 @@ final class rotation_test extends \advanced_testcase {
             'parent' => $archive->id]);
 
         $task = $this->task(2, 4, 'CAT-{YEAR}-{NEXTYEAR}', (int) $archive->id);
-        $task->id = $DB->insert_record('local_ctm_tasks', (object) [
+        $task->id = $DB->insert_record('local_coursetransfermanager_tasks', (object) [
             'name' => 'Yearly archive',
             'originsiteid' => 0,
             'categorypattern' => $task->categorypattern,
@@ -195,7 +195,7 @@ final class rotation_test extends \advanced_testcase {
         $this->assertSame([(int) $mine->id], rotation::managed_category_ids($task));
         // Adopting twice is not an error and does not duplicate.
         rotation::adopt((int) $task->id, (int) $mine->id, 2);
-        $this->assertCount(1, $DB->get_records('local_ctm_adopted', ['taskid' => $task->id]));
+        $this->assertCount(1, $DB->get_records('local_coursetransfermanager_adopted', ['taskid' => $task->id]));
         // Once adopted it is no longer offered.
         $this->assertSame([], rotation::adoptable($task));
 

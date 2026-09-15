@@ -291,7 +291,7 @@ final class rotation {
         $params['taskid'] = $task->id;
 
         $idnumbers = $DB->get_fieldset_select(
-            'local_ctm_executions',
+            'local_coursetransfermanager_executions',
             'DISTINCT origincategoryidnumber',
             "taskid = :taskid AND status $insql AND origincategoryidnumber IS NOT NULL",
             $params
@@ -372,11 +372,11 @@ final class rotation {
             throw new \moodle_exception('invalidcategoryid', 'error');
         }
 
-        if ($DB->record_exists('local_ctm_adopted', ['taskid' => $taskid, 'categoryid' => $categoryid])) {
+        if ($DB->record_exists('local_coursetransfermanager_adopted', ['taskid' => $taskid, 'categoryid' => $categoryid])) {
             return;
         }
 
-        $DB->insert_record('local_ctm_adopted', (object) [
+        $DB->insert_record('local_coursetransfermanager_adopted', (object) [
             'taskid' => $taskid,
             'categoryid' => $categoryid,
             'categoryname' => $category->get_formatted_name(),
@@ -394,7 +394,7 @@ final class rotation {
      */
     public static function unadopt(int $taskid, int $categoryid): void {
         global $DB;
-        $DB->delete_records('local_ctm_adopted', ['taskid' => $taskid, 'categoryid' => $categoryid]);
+        $DB->delete_records('local_coursetransfermanager_adopted', ['taskid' => $taskid, 'categoryid' => $categoryid]);
     }
 
     /**
@@ -409,13 +409,13 @@ final class rotation {
         global $DB;
 
         $created = $DB->get_fieldset_select(
-            'local_ctm_executions',
+            'local_coursetransfermanager_executions',
             'DISTINCT destinationcategoryid',
             'taskid = :taskid AND destinationcategoryid IS NOT NULL',
             ['taskid' => $task->id]
         );
         $adopted = $DB->get_fieldset_select(
-            'local_ctm_adopted',
+            'local_coursetransfermanager_adopted',
             'categoryid',
             'taskid = :taskid',
             ['taskid' => $task->id]

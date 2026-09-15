@@ -44,7 +44,7 @@ final class task_manager_test extends \advanced_testcase {
         $generator->create_course(['category' => $old->id]);
 
         $now = time();
-        $taskid = $DB->insert_record('local_ctm_tasks', (object)[
+        $taskid = $DB->insert_record('local_coursetransfermanager_tasks', (object)[
             'type' => 'restore_category', 'name' => 'Tarea', 'originsiteid' => 1,
             'categorypattern' => 'SJD{YEAR}', 'targetcategoryid' => $parent->id,
             'cronexpression' => '0 2 1 9 *', 'retentiondays' => 30,
@@ -53,7 +53,7 @@ final class task_manager_test extends \advanced_testcase {
             'timecreated' => $now, 'timemodified' => $now,
         ]);
         // A deletion overdue since yesterday and an overdue pruning candidate.
-        $executionid = $DB->insert_record('local_ctm_executions', (object)[
+        $executionid = $DB->insert_record('local_coursetransfermanager_executions', (object)[
             'taskid' => $taskid, 'status' => 'completed', 'manualrun' => 0,
             'origincategoryid' => 77, 'origincategoryname' => 'X',
             'destinationcategoryid' => $old->id,
@@ -61,7 +61,7 @@ final class task_manager_test extends \advanced_testcase {
             'deletestatus' => deletion_manager::STATUS_SCHEDULED,
             'timecreated' => $now, 'timemodified' => $now,
         ]);
-        $pruneid = $DB->insert_record('local_ctm_prune', (object)[
+        $pruneid = $DB->insert_record('local_coursetransfermanager_prune', (object)[
             'taskid' => $taskid, 'categoryid' => $old->id, 'categoryname' => 'X',
             'announcedat' => $now - 10 * DAYSECS, 'graceuntil' => $now - DAYSECS,
             'status' => 'announced', 'timecreated' => $now, 'timemodified' => $now,
@@ -71,11 +71,11 @@ final class task_manager_test extends \advanced_testcase {
         (new task_manager())->cleanup_tasks();
 
         // Nothing executed, everything postponed into the future.
-        $execution = $DB->get_record('local_ctm_executions', ['id' => $executionid]);
+        $execution = $DB->get_record('local_coursetransfermanager_executions', ['id' => $executionid]);
         $this->assertSame(deletion_manager::STATUS_SCHEDULED, $execution->deletestatus);
         $this->assertGreaterThan($now, (int)$execution->scheduleddeleteat);
 
-        $candidate = $DB->get_record('local_ctm_prune', ['id' => $pruneid]);
+        $candidate = $DB->get_record('local_coursetransfermanager_prune', ['id' => $pruneid]);
         $this->assertSame('announced', $candidate->status);
         $this->assertGreaterThan($now, (int)$candidate->graceuntil);
 

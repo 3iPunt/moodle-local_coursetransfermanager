@@ -39,7 +39,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
     $dbman = $DB->get_manager();
 
     if ($oldversion < 2026050401) {
-        $table = new xmldb_table('local_ctm_tasks');
+        $table = new xmldb_table('local_coursetransfermanager_tasks');
 
         $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
         $table->add_field('name', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL);
@@ -61,7 +61,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
             $dbman->create_table($table);
         }
 
-        $table = new xmldb_table('local_ctm_executions');
+        $table = new xmldb_table('local_coursetransfermanager_executions');
 
         $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
         $table->add_field('taskid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
@@ -77,7 +77,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
         $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
 
         $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
-        $table->add_key('task_fk', XMLDB_KEY_FOREIGN, ['taskid'], 'local_ctm_tasks', ['id']);
+        $table->add_key('task_fk', XMLDB_KEY_FOREIGN, ['taskid'], 'local_coursetransfermanager_tasks', ['id']);
 
         $table->add_index('status_idx', XMLDB_INDEX_NOTUNIQUE, ['status']);
 
@@ -89,7 +89,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
     }
 
     if ($oldversion < 2026050402) {
-        $table = new xmldb_table('local_ctm_tasks');
+        $table = new xmldb_table('local_coursetransfermanager_tasks');
 
         $field = new xmldb_field('type', XMLDB_TYPE_CHAR, '50', null, XMLDB_NOTNULL, null, 'restore_category');
         if (!$dbman->field_exists($table, $field)) {
@@ -131,7 +131,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
     }
 
     if ($oldversion < 2026050805) {
-        $table = new xmldb_table('local_ctm_tasks');
+        $table = new xmldb_table('local_coursetransfermanager_tasks');
 
         $field = new xmldb_field('categorytoken', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, '');
         if (!$dbman->field_exists($table, $field)) {
@@ -148,7 +148,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
 
     // Switch to origin-site reference, drop legacy site/token fields, add scheduling timestamps.
     if ($oldversion < 2026051301) {
-        $table = new xmldb_table('local_ctm_tasks');
+        $table = new xmldb_table('local_coursetransfermanager_tasks');
 
         // Add new fields.
         $field = new xmldb_field('originsiteid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'name');
@@ -168,7 +168,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
 
         // Best-effort migration: try to match existing siteurl values to origin sites.
         if ($dbman->field_exists($table, new xmldb_field('siteurl'))) {
-            $records = $DB->get_records('local_ctm_tasks');
+            $records = $DB->get_records('local_coursetransfermanager_tasks');
             foreach ($records as $record) {
                 $host = !empty($record->siteurl) ? rtrim($record->siteurl, '/') : '';
                 if ($host === '') {
@@ -182,7 +182,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
                     IGNORE_MULTIPLE
                 );
                 if ($origin) {
-                    $DB->set_field('local_ctm_tasks', 'originsiteid', $origin->id, ['id' => $record->id]);
+                    $DB->set_field('local_coursetransfermanager_tasks', 'originsiteid', $origin->id, ['id' => $record->id]);
                 }
             }
         }
@@ -211,7 +211,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
         $dbman->add_key($table, $key);
 
         // Executions: index scheduleddeleteat to speed up cleanup sweep.
-        $extable = new xmldb_table('local_ctm_executions');
+        $extable = new xmldb_table('local_coursetransfermanager_executions');
         $index = new xmldb_index('scheduleddeleteat_idx', XMLDB_INDEX_NOTUNIQUE, ['scheduleddeleteat']);
         if (!$dbman->index_exists($extable, $index)) {
             $dbman->add_index($extable, $index);
@@ -224,7 +224,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
     // destination category tracking and two-phase pruning. Drops the dead remotekeepyears field.
     if ($oldversion < 2026072800) {
         // Tasks: creator and per-task notification settings.
-        $table = new xmldb_table('local_ctm_tasks');
+        $table = new xmldb_table('local_coursetransfermanager_tasks');
 
         $field = new xmldb_field('usercreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'enabled');
         if (!$dbman->field_exists($table, $field)) {
@@ -245,7 +245,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
         // and someone must receive their lifecycle notifications from now on.
         $admin = get_admin();
         if ($admin) {
-            $DB->set_field_select('local_ctm_tasks', 'usercreated', $admin->id, 'usercreated = 0');
+            $DB->set_field_select('local_coursetransfermanager_tasks', 'usercreated', $admin->id, 'usercreated = 0');
         }
 
         // The add_key call has no exists-guard: probe the backing index so a re-run does not duplicate it.
@@ -262,7 +262,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
         }
 
         // Executions: manual launches, created category and remote deletion lifecycle.
-        $table = new xmldb_table('local_ctm_executions');
+        $table = new xmldb_table('local_coursetransfermanager_executions');
 
         $field = new xmldb_field('manualrun', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'status');
         if (!$dbman->field_exists($table, $field)) {
@@ -311,14 +311,14 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
         // Backfill: successful executions with a pending scheduled deletion keep their schedule.
         // Executions with a null scheduleddeleteat stay null (already deleted or not applicable).
         $DB->set_field_select(
-            'local_ctm_executions',
+            'local_coursetransfermanager_executions',
             'deletestatus',
             'scheduled',
             "scheduleddeleteat IS NOT NULL AND status = 'success'"
         );
 
         // Two-phase pruning: candidates are announced with a grace period before deletion.
-        $table = new xmldb_table('local_ctm_prune');
+        $table = new xmldb_table('local_coursetransfermanager_prune');
 
         $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
         $table->add_field('taskid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
@@ -333,7 +333,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
         $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
 
         $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
-        $table->add_key('task_fk', XMLDB_KEY_FOREIGN, ['taskid'], 'local_ctm_tasks', ['id']);
+        $table->add_key('task_fk', XMLDB_KEY_FOREIGN, ['taskid'], 'local_coursetransfermanager_tasks', ['id']);
 
         $table->add_index('status_idx', XMLDB_INDEX_NOTUNIQUE, ['status']);
         $table->add_index('categoryid_idx', XMLDB_INDEX_NOTUNIQUE, ['categoryid']);
@@ -351,7 +351,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
     // the archive) decides what to archive and what to prune. Tasks no longer need
     // editing every course.
     if ($oldversion < 2026073100) {
-        $table = new xmldb_table('local_ctm_tasks');
+        $table = new xmldb_table('local_coursetransfermanager_tasks');
 
         // P — academic years kept in the origin platform.
         $field = new xmldb_field(
@@ -375,7 +375,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
         // - {PREVYEAR}-{YEAR} described "course starting the previous year"; as a
         // mask the starting year must be the first one, hence {YEAR}-{NEXTYEAR}.
         // Without this the whole policy would sit one year off.
-        foreach ($DB->get_records('local_ctm_tasks', null, '', 'id, categorypattern') as $task) {
+        foreach ($DB->get_records('local_coursetransfermanager_tasks', null, '', 'id, categorypattern') as $task) {
             $mask = (string) $task->categorypattern;
             $mask = trim($mask);
             $mask = preg_replace('/^\^/', '', $mask);
@@ -383,7 +383,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
             $mask = str_replace('{PREVYEAR}-{YEAR}', '{YEAR}-{NEXTYEAR}', $mask);
             $mask = str_replace('{PREVYEAR}/{YEAR}', '{YEAR}/{NEXTYEAR}', $mask);
             if ($mask !== (string) $task->categorypattern) {
-                $DB->set_field('local_ctm_tasks', 'categorypattern', $mask, ['id' => $task->id]);
+                $DB->set_field('local_coursetransfermanager_tasks', 'categorypattern', $mask, ['id' => $task->id]);
             }
         }
 
@@ -393,7 +393,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
     // The legacy single-year path was dropped: every task rotates by policy, so the
     // mode column no longer means anything.
     if ($oldversion < 2026073101) {
-        $table = new xmldb_table('local_ctm_tasks');
+        $table = new xmldb_table('local_coursetransfermanager_tasks');
         $field = new xmldb_field('patternmode');
         if ($dbman->field_exists($table, $field)) {
             $dbman->drop_field($table, $field);
@@ -406,7 +406,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
     // invisible to the pruning by design (the safety rule that protects foreign
     // content). Adopting one is an explicit, audited decision.
     if ($oldversion < 2026073102) {
-        $table = new xmldb_table('local_ctm_adopted');
+        $table = new xmldb_table('local_coursetransfermanager_adopted');
 
         $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
         $table->add_field('taskid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
@@ -416,7 +416,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
         $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
 
         $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
-        $table->add_key('task_fk', XMLDB_KEY_FOREIGN, ['taskid'], 'local_ctm_tasks', ['id']);
+        $table->add_key('task_fk', XMLDB_KEY_FOREIGN, ['taskid'], 'local_coursetransfermanager_tasks', ['id']);
 
         $table->add_index('categoryid_idx', XMLDB_INDEX_NOTUNIQUE, ['categoryid']);
         $table->add_index('taskcategory_idx', XMLDB_INDEX_UNIQUE, ['taskid', 'categoryid']);
@@ -426,6 +426,29 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
         }
 
         upgrade_plugin_savepoint(true, 2026073102, 'local', 'coursetransfermanager');
+    }
+
+    if ($oldversion < 2026091500) {
+        // The tables were named local_ctm_*, which does not carry the component
+        // prefix Moodle expects. Renamed, keeping the data.
+        $renames = [
+            'local_ctm_tasks' => 'local_coursetransfermanager_tasks',
+            'local_ctm_executions' => 'local_coursetransfermanager_executions',
+            'local_ctm_adopted' => 'local_coursetransfermanager_adopted',
+            'local_ctm_prune' => 'local_coursetransfermanager_prune',
+        ];
+
+        foreach ($renames as $oldname => $newname) {
+            $oldtable = new xmldb_table($oldname);
+            $newtable = new xmldb_table($newname);
+            // Guarded both ways: a re-run, or a fresh install that never had the
+            // old names, must be a no-op.
+            if ($dbman->table_exists($oldtable) && !$dbman->table_exists($newtable)) {
+                $dbman->rename_table($oldtable, $newname);
+            }
+        }
+
+        upgrade_plugin_savepoint(true, 2026091500, 'local', 'coursetransfermanager');
     }
 
     return true;

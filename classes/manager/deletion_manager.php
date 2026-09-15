@@ -78,8 +78,8 @@ final class deletion_manager {
         $sql = "SELECT e.id, e.taskid, t.name AS taskname, t.originsiteid, t.usercreated,
                        e.origincategoryid, e.origincategoryname, e.origincategoryidnumber,
                        e.scheduleddeleteat, e.deletestatus
-                  FROM {local_ctm_executions} e
-                  JOIN {local_ctm_tasks} t ON t.id = e.taskid
+                  FROM {local_coursetransfermanager_executions} e
+                  JOIN {local_coursetransfermanager_tasks} t ON t.id = e.taskid
                  WHERE e.deletestatus IN (?, ?)" . $taskwhere . "
               ORDER BY e.scheduleddeleteat ASC";
 
@@ -97,7 +97,7 @@ final class deletion_manager {
     public static function cancel(int $executionid, int $userid): stdClass {
         global $DB;
 
-        $execution = $DB->get_record('local_ctm_executions', ['id' => $executionid], '*', MUST_EXIST);
+        $execution = $DB->get_record('local_coursetransfermanager_executions', ['id' => $executionid], '*', MUST_EXIST);
         if (!in_array($execution->deletestatus, [self::STATUS_SCHEDULED, self::STATUS_WARNED], true)) {
             throw new moodle_exception('deletionnotcancellable', 'local_coursetransfermanager');
         }
@@ -106,7 +106,7 @@ final class deletion_manager {
         $execution->deletecancelledby = $userid;
         $execution->deletecancelledat = time();
         $execution->timemodified = time();
-        $DB->update_record('local_ctm_executions', $execution);
+        $DB->update_record('local_coursetransfermanager_executions', $execution);
 
         return $execution;
     }
@@ -124,8 +124,8 @@ final class deletion_manager {
         $sql = "SELECT e.id, e.taskid, t.name AS taskname, t.originsiteid, t.usercreated,
                        t.notifylevel, t.notifyrecipients,
                        e.origincategoryname, e.origincategoryidnumber, e.scheduleddeleteat
-                  FROM {local_ctm_executions} e
-                  JOIN {local_ctm_tasks} t ON t.id = e.taskid
+                  FROM {local_coursetransfermanager_executions} e
+                  JOIN {local_coursetransfermanager_tasks} t ON t.id = e.taskid
                  WHERE e.deletestatus = ?
                    AND t.enabled = 1
                    AND e.scheduleddeleteat IS NOT NULL
@@ -143,7 +143,7 @@ final class deletion_manager {
      */
     public static function mark_warned(int $executionid): void {
         global $DB;
-        $DB->update_record('local_ctm_executions', (object) [
+        $DB->update_record('local_coursetransfermanager_executions', (object) [
             'id' => $executionid,
             'deletestatus' => self::STATUS_WARNED,
             'timemodified' => time(),
@@ -176,8 +176,8 @@ final class deletion_manager {
         $sql = "SELECT e.id, e.taskid, t.name AS taskname, t.originsiteid, t.usercreated,
                        t.notifylevel, t.notifyrecipients, e.status, e.destinationcategoryid,
                        e.origincategoryid, e.origincategoryname, e.scheduleddeleteat, e.deletestatus
-                  FROM {local_ctm_executions} e
-                  JOIN {local_ctm_tasks} t ON t.id = e.taskid
+                  FROM {local_coursetransfermanager_executions} e
+                  JOIN {local_coursetransfermanager_tasks} t ON t.id = e.taskid
                  WHERE e.deletestatus IN (?, ?)
                    AND t.enabled = 1
                    AND e.scheduleddeleteat IS NOT NULL
@@ -265,7 +265,7 @@ final class deletion_manager {
      */
     private static function postpone(int $executionid, int $now): void {
         global $DB;
-        $DB->update_record('local_ctm_executions', (object) [
+        $DB->update_record('local_coursetransfermanager_executions', (object) [
             'id' => $executionid,
             'scheduleddeleteat' => $now + self::HOLD_POSTPONE_SECONDS,
             'timemodified' => $now,
@@ -283,7 +283,7 @@ final class deletion_manager {
         global $DB;
 
         $due = $DB->get_records_select(
-            'local_ctm_executions',
+            'local_coursetransfermanager_executions',
             "deletestatus IN (?, ?) AND scheduleddeleteat IS NOT NULL AND scheduleddeleteat <= ?",
             [self::STATUS_SCHEDULED, self::STATUS_WARNED, $now],
             '',
@@ -307,7 +307,7 @@ final class deletion_manager {
         global $DB;
 
         $DB->execute(
-            "UPDATE {local_ctm_executions}
+            "UPDATE {local_coursetransfermanager_executions}
                 SET deletestatus = :status, timemodified = :now
               WHERE taskid = :taskid
                 AND origincategoryid = :origincategoryid

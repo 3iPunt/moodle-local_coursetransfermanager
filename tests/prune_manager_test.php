@@ -66,7 +66,7 @@ final class prune_manager_test extends \advanced_testcase {
         ]);
 
         $now = time();
-        $taskid = $DB->insert_record('local_ctm_tasks', (object)[
+        $taskid = $DB->insert_record('local_coursetransfermanager_tasks', (object)[
             'type' => 'restore_category', 'name' => 'Tarea', 'originsiteid' => 1,
             'categorypattern' => 'SJD{YEAR}', 'targetcategoryid' => $parent->id,
             'cronexpression' => '0 2 1 9 *', 'retentiondays' => 30,
@@ -77,7 +77,7 @@ final class prune_manager_test extends \advanced_testcase {
         ]);
         // Manager-created is tracked via destinationcategoryid on the executions.
         foreach ([$managedold, $managedmid, $managednew] as $category) {
-            $DB->insert_record('local_ctm_executions', (object)[
+            $DB->insert_record('local_coursetransfermanager_executions', (object)[
                 'taskid' => $taskid, 'status' => 'completed', 'manualrun' => 0,
                 'destinationcategoryid' => $category->id,
                 'timecreated' => $now, 'timemodified' => $now,
@@ -85,7 +85,7 @@ final class prune_manager_test extends \advanced_testcase {
         }
 
         return (object)[
-            'task' => $DB->get_record('local_ctm_tasks', ['id' => $taskid]),
+            'task' => $DB->get_record('local_coursetransfermanager_tasks', ['id' => $taskid]),
             'parent' => $parent, 'managedold' => $managedold, 'managedmid' => $managedmid,
             'managednew' => $managednew, 'foreign' => $foreign,
             'years' => (object)['current' => $current, 'middle' => $middle, 'prunable' => $prunable],
@@ -116,18 +116,18 @@ final class prune_manager_test extends \advanced_testcase {
         );
         // The one still inside the archive window is NOT a candidate: being out
         // of production is not the same as being out of the archive.
-        $this->assertSame(1, $DB->count_records('local_ctm_prune'));
+        $this->assertSame(1, $DB->count_records('local_coursetransfermanager_prune'));
         $this->assertFalse($DB->record_exists(
-            'local_ctm_prune',
+            'local_coursetransfermanager_prune',
             ['categoryid' => $seed->managedmid->id]
         ));
         // Neither the current course nor the foreign MED1042 are candidates.
         $this->assertFalse($DB->record_exists(
-            'local_ctm_prune',
+            'local_coursetransfermanager_prune',
             ['categoryid' => $seed->managednew->id]
         ));
         $this->assertFalse($DB->record_exists(
-            'local_ctm_prune',
+            'local_coursetransfermanager_prune',
             ['categoryid' => $seed->foreign->id]
         ));
 
@@ -178,14 +178,14 @@ final class prune_manager_test extends \advanced_testcase {
         $this->assertCount(1, prune_manager::detect(time(), 7));
 
         // ...and one more year of archive takes it out of range again.
-        $DB->delete_records('local_ctm_prune', []);
-        $DB->set_field('local_ctm_tasks', 'destinationkeepyears', 5, ['id' => $seed->task->id]);
+        $DB->delete_records('local_coursetransfermanager_prune', []);
+        $DB->set_field('local_coursetransfermanager_tasks', 'destinationkeepyears', 5, ['id' => $seed->task->id]);
         $this->assertCount(0, prune_manager::detect(time(), 7));
 
         // Shrinking production has the same effect: fewer years in production
         // means the archive window starts later.
-        $DB->set_field('local_ctm_tasks', 'destinationkeepyears', 4, ['id' => $seed->task->id]);
-        $DB->set_field('local_ctm_tasks', 'originkeepyears', 3, ['id' => $seed->task->id]);
+        $DB->set_field('local_coursetransfermanager_tasks', 'destinationkeepyears', 4, ['id' => $seed->task->id]);
+        $DB->set_field('local_coursetransfermanager_tasks', 'originkeepyears', 3, ['id' => $seed->task->id]);
         $this->assertCount(0, prune_manager::detect(time(), 7));
     }
 
@@ -199,7 +199,7 @@ final class prune_manager_test extends \advanced_testcase {
 
         $seed = $this->seed();
         prune_manager::detect(time(), 7);
-        $DB->set_field('local_ctm_tasks', 'enabled', 0, ['id' => $seed->task->id]);
+        $DB->set_field('local_coursetransfermanager_tasks', 'enabled', 0, ['id' => $seed->task->id]);
 
         $this->assertCount(0, prune_manager::execute_due(time() + 8 * DAYSECS));
         $this->assertTrue($DB->record_exists('course_categories', ['id' => $seed->managedold->id]));

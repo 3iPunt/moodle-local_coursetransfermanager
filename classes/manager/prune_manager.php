@@ -67,7 +67,7 @@ final class prune_manager {
         // Only categories the manager created are ever pruning candidates: never
         // touch content that reached this platform some other way.
         $managed = $DB->get_fieldset_select(
-            'local_ctm_executions',
+            'local_coursetransfermanager_executions',
             'DISTINCT destinationcategoryid',
             'destinationcategoryid IS NOT NULL'
         );
@@ -77,7 +77,7 @@ final class prune_manager {
         $managed = array_map('intval', $managed);
 
         $tasks = $DB->get_records_select(
-            'local_ctm_tasks',
+            'local_coursetransfermanager_tasks',
             'enabled = 1 AND targetcategoryid IS NOT NULL AND targetcategoryid > 0 AND destinationkeepyears > 0'
         );
 
@@ -111,7 +111,7 @@ final class prune_manager {
                 }
                 // Never re-announce a live candidate nor one an admin excluded.
                 $exists = $DB->record_exists_select(
-                    'local_ctm_prune',
+                    'local_coursetransfermanager_prune',
                     'categoryid = ? AND status IN (?, ?)',
                     [(int) $child->id, self::STATUS_ANNOUNCED, self::STATUS_EXCLUDED]
                 );
@@ -129,7 +129,7 @@ final class prune_manager {
                     'timecreated' => $now,
                     'timemodified' => $now,
                 ];
-                $candidate->id = $DB->insert_record('local_ctm_prune', $candidate);
+                $candidate->id = $DB->insert_record('local_coursetransfermanager_prune', $candidate);
                 mtrace('Pruning candidate announced: category id=' . $candidate->categoryid
                     . ' "' . $candidate->categoryname . '" (grace until ' . userdate($candidate->graceuntil) . ')');
                 $announced[] = $candidate;
@@ -151,8 +151,8 @@ final class prune_manager {
         // Candidates of disabled tasks are frozen (pausing a task pauses its deletions).
         $due = $DB->get_records_sql(
             "SELECT p.*
-               FROM {local_ctm_prune} p
-               JOIN {local_ctm_tasks} t ON t.id = p.taskid
+               FROM {local_coursetransfermanager_prune} p
+               JOIN {local_coursetransfermanager_tasks} t ON t.id = p.taskid
               WHERE p.status = ? AND p.graceuntil <= ? AND t.enabled = 1
            ORDER BY p.graceuntil ASC",
             [self::STATUS_ANNOUNCED, $now]
@@ -194,14 +194,14 @@ final class prune_manager {
         global $DB;
 
         $due = $DB->get_records_select(
-            'local_ctm_prune',
+            'local_coursetransfermanager_prune',
             'status = ? AND graceuntil <= ?',
             [self::STATUS_ANNOUNCED, $now],
             '',
             'id'
         );
         foreach ($due as $candidate) {
-            $DB->update_record('local_ctm_prune', (object) [
+            $DB->update_record('local_coursetransfermanager_prune', (object) [
                 'id' => $candidate->id,
                 'graceuntil' => $now + $seconds,
                 'timemodified' => $now,
@@ -221,7 +221,7 @@ final class prune_manager {
     public static function exclude(int $pruneid, int $userid): stdClass {
         global $DB;
 
-        $candidate = $DB->get_record('local_ctm_prune', ['id' => $pruneid], '*', MUST_EXIST);
+        $candidate = $DB->get_record('local_coursetransfermanager_prune', ['id' => $pruneid], '*', MUST_EXIST);
         if ($candidate->status !== self::STATUS_ANNOUNCED) {
             throw new moodle_exception('prunenotexcludable', 'local_coursetransfermanager');
         }
@@ -230,7 +230,7 @@ final class prune_manager {
         $candidate->excludedby = $userid;
         $candidate->excludedat = time();
         $candidate->timemodified = time();
-        $DB->update_record('local_ctm_prune', $candidate);
+        $DB->update_record('local_coursetransfermanager_prune', $candidate);
 
         return $candidate;
     }
@@ -252,8 +252,8 @@ final class prune_manager {
         }
 
         $sql = "SELECT p.*, t.name AS taskname, t.usercreated, t.notifylevel, t.notifyrecipients
-                  FROM {local_ctm_prune} p
-                  JOIN {local_ctm_tasks} t ON t.id = p.taskid
+                  FROM {local_coursetransfermanager_prune} p
+                  JOIN {local_coursetransfermanager_tasks} t ON t.id = p.taskid
                  WHERE p.status = ?" . $taskwhere . "
               ORDER BY p.graceuntil ASC";
 
@@ -269,7 +269,7 @@ final class prune_manager {
      */
     private static function mark(int $pruneid, string $status): void {
         global $DB;
-        $DB->update_record('local_ctm_prune', (object) [
+        $DB->update_record('local_coursetransfermanager_prune', (object) [
             'id' => $pruneid,
             'status' => $status,
             'timemodified' => time(),

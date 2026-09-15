@@ -93,7 +93,7 @@ $pageobj = new task_view_page(
     agenda::get_items($now, (int)$task->id),
     rotation::managed_categories($task),
     rotation::adoptable($task),
-    array_values($DB->get_records('local_ctm_adopted', ['taskid' => $task->id])),
+    array_values($DB->get_records('local_coursetransfermanager_adopted', ['taskid' => $task->id])),
     $originhost,
     $warningdays,
     $gracedays,

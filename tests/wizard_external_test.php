@@ -229,7 +229,7 @@ final class wizard_external_test extends \advanced_testcase {
             [(int)$recipient->id, 999999]
         );
 
-        $task = $DB->get_record('local_ctm_tasks', ['id' => $result['id']], '*', MUST_EXIST);
+        $task = $DB->get_record('local_coursetransfermanager_tasks', ['id' => $result['id']], '*', MUST_EXIST);
         $this->assertSame('Archivo anual', $task->name);
         $this->assertSame(1, (int)$task->enabled);
         $this->assertSame((int)$USER->id, (int)$task->usercreated);
@@ -254,7 +254,7 @@ final class wizard_external_test extends \advanced_testcase {
             'full',
             []
         );
-        $updated = $DB->get_record('local_ctm_tasks', ['id' => $task->id]);
+        $updated = $DB->get_record('local_coursetransfermanager_tasks', ['id' => $task->id]);
         $this->assertSame('Renombrada', $updated->name);
         $this->assertSame(3, (int)$updated->originkeepyears);
         $this->assertSame((int)$task->usercreated, (int)$updated->usercreated);
@@ -347,14 +347,14 @@ final class wizard_external_test extends \advanced_testcase {
             'idnumber' => 'CAT-' . ($current - 2) . '-' . ($current - 1)]);
 
         // Managed means the task brought it: that is what makes it a fact.
-        $taskid = $DB->insert_record('local_ctm_tasks', (object)[
+        $taskid = $DB->insert_record('local_coursetransfermanager_tasks', (object)[
             'name' => 'T', 'originsiteid' => $origin, 'categorypattern' => 'CAT-{YEAR}-{NEXTYEAR}',
             'targetcategoryid' => $archive->id, 'cronexpression' => '0 2 1 9 *',
             'retentiondays' => 30, 'originkeepyears' => 2, 'destinationkeepyears' => 4,
             'restoreuserdata' => 0, 'enabled' => 1, 'usercreated' => 2, 'notifylevel' => 'full',
             'timecreated' => time(), 'timemodified' => time(),
         ]);
-        $DB->insert_record('local_ctm_executions', (object)[
+        $DB->insert_record('local_coursetransfermanager_executions', (object)[
             'taskid' => $taskid, 'status' => 'completed', 'manualrun' => 0,
             'destinationcategoryid' => $existing->id,
             'timecreated' => time(), 'timemodified' => time(),

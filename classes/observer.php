@@ -55,7 +55,7 @@ class observer {
         }
 
         // Only executions of this manager launched with that request matter.
-        $execution = $DB->get_record('local_ctm_executions', [
+        $execution = $DB->get_record('local_coursetransfermanager_executions', [
             'requestid' => $requestid,
             'status' => task_manager::STATUS_SUCCESS,
         ], '*', IGNORE_MULTIPLE);
@@ -65,9 +65,9 @@ class observer {
 
         $execution->status = task_manager::STATUS_COMPLETED;
         $execution->timemodified = time();
-        $DB->update_record('local_ctm_executions', $execution);
+        $DB->update_record('local_coursetransfermanager_executions', $execution);
 
-        $task = $DB->get_record('local_ctm_tasks', ['id' => $execution->taskid]);
+        $task = $DB->get_record('local_coursetransfermanager_tasks', ['id' => $execution->taskid]);
         if ($task) {
             notifier::restore_completed($task, $execution);
         }

@@ -42,7 +42,7 @@ final class deletion_manager_test extends \advanced_testcase {
         global $DB;
 
         $now = time();
-        $taskid = $DB->insert_record('local_ctm_tasks', (object)[
+        $taskid = $DB->insert_record('local_coursetransfermanager_tasks', (object)[
             'type' => 'restore_category', 'name' => 'Tarea', 'originsiteid' => 1,
             'categorypattern' => 'SJD{YEAR}', 'targetcategoryid' => 1,
             'cronexpression' => '0 2 1 9 *', 'retentiondays' => 30,
@@ -51,7 +51,7 @@ final class deletion_manager_test extends \advanced_testcase {
             'usercreated' => 2, 'notifylevel' => 'full',
             'timecreated' => $now, 'timemodified' => $now,
         ]);
-        $executionid = $DB->insert_record('local_ctm_executions', (object)[
+        $executionid = $DB->insert_record('local_coursetransfermanager_executions', (object)[
             'taskid' => $taskid, 'status' => $overrides['status'] ?? 'success', 'manualrun' => 0,
             'origincategoryid' => 77, 'origincategoryname' => 'Curs 2025-2026',
             'destinationcategoryid' => $overrides['destinationcategoryid'] ?? null,
@@ -59,7 +59,7 @@ final class deletion_manager_test extends \advanced_testcase {
             'deletestatus' => deletion_manager::STATUS_SCHEDULED,
             'timecreated' => $now, 'timemodified' => $now,
         ]);
-        return $DB->get_record('local_ctm_executions', ['id' => $executionid]);
+        return $DB->get_record('local_coursetransfermanager_executions', ['id' => $executionid]);
     }
 
     /**
@@ -78,7 +78,7 @@ final class deletion_manager_test extends \advanced_testcase {
         $this->assertSame('held', $results[0]->outcome);
         $this->assertStringContainsString('Curs 2025-2026', $results[0]->detail);
 
-        $row = $DB->get_record('local_ctm_executions', ['id' => $execution->id]);
+        $row = $DB->get_record('local_coursetransfermanager_executions', ['id' => $execution->id]);
         $this->assertSame(deletion_manager::STATUS_SCHEDULED, $row->deletestatus);
         $this->assertGreaterThan(time(), (int)$row->scheduleddeleteat);
     }
@@ -105,7 +105,7 @@ final class deletion_manager_test extends \advanced_testcase {
             $this->assertSame('held', $result->outcome);
         }
         foreach ([$orphan, $empty] as $execution) {
-            $row = $DB->get_record('local_ctm_executions', ['id' => $execution->id]);
+            $row = $DB->get_record('local_coursetransfermanager_executions', ['id' => $execution->id]);
             $this->assertSame(deletion_manager::STATUS_SCHEDULED, $row->deletestatus);
             $this->assertGreaterThan(time(), (int)$row->scheduleddeleteat);
         }
@@ -176,7 +176,7 @@ final class deletion_manager_test extends \advanced_testcase {
         $this->assertCount(0, deletion_manager::process_due(time() + 30 * DAYSECS));
         $this->assertSame(
             deletion_manager::STATUS_CANCELLED,
-            $DB->get_field('local_ctm_executions', 'deletestatus', ['id' => $execution->id])
+            $DB->get_field('local_coursetransfermanager_executions', 'deletestatus', ['id' => $execution->id])
         );
 
         // And it cannot be cancelled again.

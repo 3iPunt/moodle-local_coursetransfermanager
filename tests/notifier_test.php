@@ -43,7 +43,7 @@ final class notifier_test extends \advanced_testcase {
         $extra = $generator->create_user();
 
         $now = time();
-        $taskid = $DB->insert_record('local_ctm_tasks', (object)[
+        $taskid = $DB->insert_record('local_coursetransfermanager_tasks', (object)[
             'type' => 'restore_category', 'name' => 'Tarea', 'originsiteid' => 1,
             'categorypattern' => 'SJD{YEAR}', 'targetcategoryid' => 1,
             'cronexpression' => '0 2 1 9 *', 'retentiondays' => 30,
@@ -54,7 +54,7 @@ final class notifier_test extends \advanced_testcase {
         ]);
 
         return (object)[
-            'task' => $DB->get_record('local_ctm_tasks', ['id' => $taskid]),
+            'task' => $DB->get_record('local_coursetransfermanager_tasks', ['id' => $taskid]),
             'creator' => $creator,
             'extra' => $extra,
         ];
@@ -131,7 +131,7 @@ final class notifier_test extends \advanced_testcase {
         $this->preventResetByRollback();
 
         $seed = $this->seed();
-        $executionid = $DB->insert_record('local_ctm_executions', (object)[
+        $executionid = $DB->insert_record('local_coursetransfermanager_executions', (object)[
             'taskid' => $seed->task->id, 'status' => task_manager::STATUS_SUCCESS,
             'manualrun' => 0, 'requestid' => 424242,
             'origincategoryname' => 'Curs 2025-2026',
@@ -152,7 +152,7 @@ final class notifier_test extends \advanced_testcase {
 
         $this->assertSame(
             task_manager::STATUS_COMPLETED,
-            $DB->get_field('local_ctm_executions', 'status', ['id' => $executionid])
+            $DB->get_field('local_coursetransfermanager_executions', 'status', ['id' => $executionid])
         );
         $this->assertCount(2, $messages);
         $this->assertSame('restore_completed', $messages[0]->eventtype);
@@ -166,7 +166,7 @@ final class notifier_test extends \advanced_testcase {
         observer::request_completed($other);
         $this->assertSame(
             task_manager::STATUS_COMPLETED,
-            $DB->get_field('local_ctm_executions', 'status', ['id' => $executionid])
+            $DB->get_field('local_coursetransfermanager_executions', 'status', ['id' => $executionid])
         );
     }
 }

@@ -84,7 +84,7 @@ final class agenda {
         }
 
         $items = [];
-        foreach ($DB->get_records_select('local_ctm_tasks', $select, $params, 'nextruntime ASC') as $task) {
+        foreach ($DB->get_records_select('local_coursetransfermanager_tasks', $select, $params, 'nextruntime ASC') as $task) {
             // What the policy will actually bring on that date: the academic year
             // that will have outstayed its time in production by then, not the
             // current one. Nobody has to work that out in their head.

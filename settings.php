@@ -31,7 +31,6 @@
 defined('MOODLE_INTERNAL') || die();
 
 if ($hassiteconfig) {
-
     global $ADMIN, $CFG;
 
     // Plugin settings page (standard location: Plugins > Local plugins).

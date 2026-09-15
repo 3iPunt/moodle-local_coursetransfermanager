@@ -80,6 +80,58 @@ define([
     };
 
     /**
+     * Tell the user why the task cannot be run now.
+     *
+     * @param {String} taskname Task name.
+     * @param {Object} check Precheck payload.
+     * @return {Promise} Resolved with the modal.
+     */
+    const showBlocked = function(taskname, check) {
+        return Str.get_strings([
+            {key: 'runnow_blocked_title', component: 'local_coursetransfermanager'},
+            {
+                key: 'runnow_blocked_body',
+                component: 'local_coursetransfermanager',
+                param: {name: taskname, date: check.lastsuccess},
+            },
+        ]).then(function(strings) {
+            return ModalCancel.create({
+                title: strings[0],
+                body: strings[1],
+                show: true,
+            });
+        });
+    };
+
+    /**
+     * Ask for confirmation and launch the task when accepted.
+     *
+     * @param {Number} taskid Task id.
+     * @param {String} taskname Task name.
+     * @param {Object} check Precheck payload.
+     * @return {Promise} Resolved with the modal.
+     */
+    const confirmRun = function(taskid, taskname, check) {
+        return Str.get_strings([
+            {key: 'runnow_confirm_title', component: 'local_coursetransfermanager', param: taskname},
+            {key: 'runnow_confirm_body', component: 'local_coursetransfermanager', param: check.nextrun},
+            {key: 'runnow', component: 'local_coursetransfermanager'},
+        ]).then(function(strings) {
+            return ModalSaveCancel.create({
+                title: strings[0],
+                body: strings[1],
+                buttons: {save: strings[2]},
+                show: true,
+            });
+        }).then(function(modal) {
+            modal.getRoot().on(ModalEvents.save, function() {
+                launch(taskid);
+            });
+            return modal;
+        });
+    };
+
+    /**
      * Run-now flow: precheck (blocked?) → confirm → launch.
      *
      * @param {HTMLElement} button The menu item.
@@ -90,39 +142,38 @@ define([
 
         call('task_run_now', {taskid: taskid, precheck: true}).then(function(check) {
             if (check.blocked) {
-                return Str.get_strings([
-                    {key: 'runnow_blocked_title', component: 'local_coursetransfermanager'},
-                    {
-                        key: 'runnow_blocked_body',
-                        component: 'local_coursetransfermanager',
-                        param: {name: taskname, date: check.lastsuccess},
-                    },
-                ]).then(function(strings) {
-                    return ModalCancel.create({
-                        title: strings[0],
-                        body: strings[1],
-                        show: true,
-                    });
-                });
+                return showBlocked(taskname, check);
             }
-            return Str.get_strings([
-                {key: 'runnow_confirm_title', component: 'local_coursetransfermanager', param: taskname},
-                {key: 'runnow_confirm_body', component: 'local_coursetransfermanager', param: check.nextrun},
-                {key: 'runnow', component: 'local_coursetransfermanager'},
-            ]).then(function(strings) {
-                return ModalSaveCancel.create({
-                    title: strings[0],
-                    body: strings[1],
-                    buttons: {save: strings[2]},
-                    show: true,
-                }).then(function(modal) {
-                    modal.getRoot().on(ModalEvents.save, function() {
-                        launch(taskid);
-                    });
-                    return modal;
-                });
-            });
+            return confirmRun(taskid, taskname, check);
         }).catch(Notification.exception);
+    };
+
+    /**
+     * Report a launched task and reload, so the panel shows the new state.
+     *
+     * @return {Promise} Resolved once the message is shown.
+     */
+    const reportLaunched = function() {
+        return Str.get_string('runnow_launched', 'local_coursetransfermanager').then(function(message) {
+            Notification.addNotification({message: message, type: 'success'});
+            window.setTimeout(function() {
+                window.location.reload();
+            }, 1200);
+            return null;
+        });
+    };
+
+    /**
+     * Report a task that could not be launched.
+     *
+     * @param {String} error Error detail returned by the service.
+     * @return {Promise} Resolved once the message is shown.
+     */
+    const reportFailed = function(error) {
+        return Str.get_string('runnow_failed', 'local_coursetransfermanager', error).then(function(message) {
+            Notification.addNotification({message: message, type: 'error'});
+            return null;
+        });
     };
 
     /**
@@ -133,19 +184,9 @@ define([
     const launch = function(taskid) {
         call('task_run_now', {taskid: taskid, precheck: false}).then(function(result) {
             if (result.launched) {
-                return Str.get_string('runnow_launched', 'local_coursetransfermanager').then(function(message) {
-                    Notification.addNotification({message: message, type: 'success'});
-                    window.setTimeout(function() {
-                        window.location.reload();
-                    }, 1200);
-                    return null;
-                });
+                return reportLaunched();
             }
-            return Str.get_string('runnow_failed', 'local_coursetransfermanager', result.error)
-                .then(function(message) {
-                    Notification.addNotification({message: message, type: 'error'});
-                    return null;
-                });
+            return reportFailed(result.error);
         }).catch(Notification.exception);
     };
 
@@ -178,18 +219,29 @@ define([
                 body: strings[1],
                 buttons: {save: strings[2]},
                 show: true,
-            }).then(function(modal) {
-                modal.getRoot().on(ModalEvents.save, function() {
-                    const promise = isprune
-                        ? call('prune_exclude', {pruneid: parseInt(button.dataset.pruneid, 10)})
-                        : call('deletion_cancel', {executionid: parseInt(button.dataset.executionid, 10)});
-                    promise.then(function(response) {
-                        markCancelled(button, response.audit);
-                        return null;
-                    }).catch(Notification.exception);
-                });
-                return modal;
             });
+        }).then(function(modal) {
+            modal.getRoot().on(ModalEvents.save, function() {
+                applyCancellation(button, isprune);
+            });
+            return modal;
+        }).catch(Notification.exception);
+    };
+
+    /**
+     * Send the cancellation (or the pruning exclusion) and mark the row.
+     *
+     * @param {HTMLElement} button Action button.
+     * @param {Boolean} isprune True for pruning exclusions.
+     */
+    const applyCancellation = function(button, isprune) {
+        const promise = isprune
+            ? call('prune_exclude', {pruneid: parseInt(button.dataset.pruneid, 10)})
+            : call('deletion_cancel', {executionid: parseInt(button.dataset.executionid, 10)});
+
+        promise.then(function(response) {
+            markCancelled(button, response.audit);
+            return null;
         }).catch(Notification.exception);
     };
 

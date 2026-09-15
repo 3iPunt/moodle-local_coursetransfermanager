@@ -38,7 +38,6 @@ use stdClass;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class executions {
-
     /** @var string[] Display statuses selectable in the history filter. */
     public const DISPLAY_STATUSES = ['success', 'completed', 'error', 'cancelled', 'deleted'];
 
@@ -49,8 +48,10 @@ final class executions {
      * @return string One of DISPLAY_STATUSES.
      */
     public static function display_status(stdClass $execution): string {
-        if ($execution->status === task_manager::STATUS_ERROR
-                || $execution->deletestatus === deletion_manager::STATUS_FAILED) {
+        if (
+            $execution->status === task_manager::STATUS_ERROR
+                || $execution->deletestatus === deletion_manager::STATUS_FAILED
+        ) {
             return 'error';
         }
         if ($execution->deletestatus === deletion_manager::STATUS_DONE) {
@@ -138,7 +139,9 @@ final class executions {
         $total = $DB->count_records_sql("SELECT COUNT(1) $base", $params);
         $rows = $DB->get_records_sql(
             "SELECT e.*, t.name AS taskname, t.originsiteid $base ORDER BY e.timecreated DESC",
-            $params, $page * $perpage, $perpage
+            $params,
+            $page * $perpage,
+            $perpage
         );
 
         foreach ($rows as $row) {
@@ -173,7 +176,9 @@ final class executions {
                    JOIN {local_ctm_tasks} t ON t.id = p.taskid
                   WHERE " . implode(' AND ', $pwhere) . "
                ORDER BY p.timemodified DESC",
-                $pparams, 0, $perpage
+                $pparams,
+                0,
+                $perpage
             );
             foreach ($prunerows as $prune) {
                 $prune->kind = 'prune';

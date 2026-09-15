@@ -30,7 +30,6 @@ use local_coursetransfermanager\external\wizard_external;
  * @covers     \local_coursetransfermanager\external\wizard_external
  */
 final class wizard_external_test extends \advanced_testcase {
-
     /**
      * Register an origin site in coursetransfer (hard dependency).
      *
@@ -103,8 +102,20 @@ final class wizard_external_test extends \advanced_testcase {
 
         // Invalid cron.
         try {
-            wizard_external::task_save(0, 'X', $origin, 'X{YEAR}', 2, $category->id, 'malo',
-                30, 4, true, 'full', []);
+            wizard_external::task_save(
+                0,
+                'X',
+                $origin,
+                'X{YEAR}',
+                2,
+                $category->id,
+                'malo',
+                30,
+                4,
+                true,
+                'full',
+                []
+            );
             $this->fail('Expected invalid_parameter_exception (cron)');
         } catch (\invalid_parameter_exception $e) {
             $this->assertStringContainsString('cronexpression', $e->debuginfo ?? $e->getMessage());
@@ -112,8 +123,20 @@ final class wizard_external_test extends \advanced_testcase {
 
         // Missing category.
         try {
-            wizard_external::task_save(0, 'X', $origin, 'X{YEAR}', 2, 999999, '0 2 1 9 *',
-                30, 4, true, 'full', []);
+            wizard_external::task_save(
+                0,
+                'X',
+                $origin,
+                'X{YEAR}',
+                2,
+                999999,
+                '0 2 1 9 *',
+                30,
+                4,
+                true,
+                'full',
+                []
+            );
             $this->fail('Expected invalid_parameter_exception (category)');
         } catch (\invalid_parameter_exception $e) {
             $this->assertStringContainsString('targetcategoryid', $e->debuginfo ?? $e->getMessage());
@@ -121,8 +144,20 @@ final class wizard_external_test extends \advanced_testcase {
 
         // A mask with no year placeholder cannot rotate: it must be refused.
         try {
-            wizard_external::task_save(0, 'X', $origin, 'X-FIXED', 2, $category->id, '0 2 1 9 *',
-                30, 4, true, 'full', []);
+            wizard_external::task_save(
+                0,
+                'X',
+                $origin,
+                'X-FIXED',
+                2,
+                $category->id,
+                '0 2 1 9 *',
+                30,
+                4,
+                true,
+                'full',
+                []
+            );
             $this->fail('Expected invalid_parameter_exception (mask)');
         } catch (\invalid_parameter_exception $e) {
             $this->assertStringContainsString('categorypattern', $e->debuginfo ?? $e->getMessage());
@@ -130,8 +165,20 @@ final class wizard_external_test extends \advanced_testcase {
 
         // Half a policy is no policy: zero years in production is refused.
         try {
-            wizard_external::task_save(0, 'X', $origin, 'X{YEAR}', 0, $category->id, '0 2 1 9 *',
-                30, 4, true, 'full', []);
+            wizard_external::task_save(
+                0,
+                'X',
+                $origin,
+                'X{YEAR}',
+                0,
+                $category->id,
+                '0 2 1 9 *',
+                30,
+                4,
+                true,
+                'full',
+                []
+            );
             $this->fail('Expected invalid_parameter_exception (originkeepyears)');
         } catch (\invalid_parameter_exception $e) {
             $this->assertStringContainsString('originkeepyears', $e->debuginfo ?? $e->getMessage());
@@ -139,8 +186,20 @@ final class wizard_external_test extends \advanced_testcase {
 
         // Non-positive retention.
         $this->expectException(\invalid_parameter_exception::class);
-        wizard_external::task_save(0, 'X', $origin, 'X{YEAR}', 2, $category->id, '0 2 1 9 *',
-            0, 4, true, 'full', []);
+        wizard_external::task_save(
+            0,
+            'X',
+            $origin,
+            'X{YEAR}',
+            2,
+            $category->id,
+            '0 2 1 9 *',
+            0,
+            4,
+            true,
+            'full',
+            []
+        );
     }
 
     /**
@@ -155,9 +214,20 @@ final class wizard_external_test extends \advanced_testcase {
         $category = $this->getDataGenerator()->create_category();
         $recipient = $this->getDataGenerator()->create_user();
 
-        $result = wizard_external::task_save(0, 'Archivo anual', $origin, 'SJD{YEAR}', 2,
-            $category->id, '0 2 1 9 *', 30, 4, false, 'essential',
-            [(int)$recipient->id, 999999]);
+        $result = wizard_external::task_save(
+            0,
+            'Archivo anual',
+            $origin,
+            'SJD{YEAR}',
+            2,
+            $category->id,
+            '0 2 1 9 *',
+            30,
+            4,
+            false,
+            'essential',
+            [(int)$recipient->id, 999999]
+        );
 
         $task = $DB->get_record('local_ctm_tasks', ['id' => $result['id']], '*', MUST_EXIST);
         $this->assertSame('Archivo anual', $task->name);
@@ -170,8 +240,20 @@ final class wizard_external_test extends \advanced_testcase {
         $this->assertNotEmpty($result['firstrun']);
 
         // Updating keeps the enabled state and does not touch the creator.
-        wizard_external::task_save((int)$task->id, 'Renombrada', $origin, 'SJD{YEAR}', 3,
-            $category->id, '0 2 1 9 *', 15, 2, true, 'full', []);
+        wizard_external::task_save(
+            (int)$task->id,
+            'Renombrada',
+            $origin,
+            'SJD{YEAR}',
+            3,
+            $category->id,
+            '0 2 1 9 *',
+            15,
+            2,
+            true,
+            'full',
+            []
+        );
         $updated = $DB->get_record('local_ctm_tasks', ['id' => $task->id]);
         $this->assertSame('Renombrada', $updated->name);
         $this->assertSame(3, (int)$updated->originkeepyears);
@@ -278,8 +360,15 @@ final class wizard_external_test extends \advanced_testcase {
             'timecreated' => time(), 'timemodified' => time(),
         ]);
 
-        $preview = wizard_external::policy_preview($origin, 'CAT-{YEAR}-{NEXTYEAR}', 2, 4,
-            (int)$archive->id, false, (int)$taskid);
+        $preview = wizard_external::policy_preview(
+            $origin,
+            'CAT-{YEAR}-{NEXTYEAR}',
+            2,
+            4,
+            (int)$archive->id,
+            false,
+            (int)$taskid
+        );
 
         // First archive cell of the current run is A−2, the one just created.
         $cell = $preview['rows'][0]['archive'][0];

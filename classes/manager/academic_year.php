@@ -55,7 +55,6 @@ use moodle_exception;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class academic_year {
-
     /** @var string Default month the academic year starts in (September). */
     public const DEFAULT_START_MONTH = 9;
 
@@ -231,9 +230,15 @@ final class academic_year {
         $tokens = array_merge(self::START_TOKENS, self::NEXT_TOKENS, ['{ANY}', '{DIGITS}']);
 
         // Split keeping the placeholders, so everything else can be quoted as literal.
-        $parts = preg_split('/(' . implode('|', array_map(
-            static fn(string $token): string => preg_quote($token, '/'), $tokens)) . ')/',
-            $mask, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
+        $parts = preg_split(
+            '/(' . implode('|', array_map(
+                static fn(string $token): string => preg_quote($token, '/'),
+                $tokens
+            )) . ')/',
+            $mask,
+            -1,
+            PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY
+        );
 
         $groups = ['start' => 0, 'next' => 0];
         $short = ['start' => false, 'next' => false];

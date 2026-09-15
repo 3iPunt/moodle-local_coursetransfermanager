@@ -47,7 +47,6 @@ use templatable;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class task_view_page implements renderable, templatable {
-
     /** @var stdClass The task. */
     private stdClass $task;
 
@@ -92,9 +91,18 @@ class task_view_page implements renderable, templatable {
      * @param int $gracedays Days of grace to exclude a pruning candidate.
      * @param int $now Reference time.
      */
-    public function __construct(stdClass $task, stdClass $projection, array $agendaitems,
-            array $managed, array $adoptable, array $adopted, ?string $originhost,
-            int $warningdays, int $gracedays, int $now) {
+    public function __construct(
+        stdClass $task,
+        stdClass $projection,
+        array $agendaitems,
+        array $managed,
+        array $adoptable,
+        array $adopted,
+        ?string $originhost,
+        int $warningdays,
+        int $gracedays,
+        int $now
+    ) {
         $this->task = $task;
         $this->projection = $projection;
         $this->agendaitems = $agendaitems;
@@ -120,12 +128,18 @@ class task_view_page implements renderable, templatable {
         $data->headertitle = format_string($this->task->name);
         $data->headerdesc = get_string('view_desc', 'local_coursetransfermanager');
         $data->panel = (new moodle_url('/local/coursetransfermanager/manage.php'))->out(false);
-        $data->settings = (new moodle_url('/admin/settings.php',
-            ['section' => 'local_coursetransfermanager']))->out(false);
-        $data->editurl = (new moodle_url('/local/coursetransfermanager/edit.php',
-            ['id' => $this->task->id]))->out(false);
-        $data->executionsurl = (new moodle_url('/local/coursetransfermanager/executions.php',
-            ['taskid' => $this->task->id]))->out(false);
+        $data->settings = (new moodle_url(
+            '/admin/settings.php',
+            ['section' => 'local_coursetransfermanager']
+        ))->out(false);
+        $data->editurl = (new moodle_url(
+            '/local/coursetransfermanager/edit.php',
+            ['id' => $this->task->id]
+        ))->out(false);
+        $data->executionsurl = (new moodle_url(
+            '/local/coursetransfermanager/executions.php',
+            ['taskid' => $this->task->id]
+        ))->out(false);
 
         $data->enabled = !empty($this->task->enabled);
         $data->originhost = $this->originhost !== null ? s($this->originhost) : null;
@@ -240,8 +254,11 @@ class task_view_page implements renderable, templatable {
             'name' => format_string((string) $category->name),
             'idnumber' => s((string) $category->idnumber),
             'label' => $year > 0 ? $year . '/' . substr((string) ($year + 1), -2) : '-',
-            'courses' => get_string('view_courses', 'local_coursetransfermanager',
-                (int) ($category->courses ?? 0)),
+            'courses' => get_string(
+                'view_courses',
+                'local_coursetransfermanager',
+                (int) ($category->courses ?? 0)
+            ),
             'url' => (new moodle_url('/course/index.php', ['categoryid' => $category->id]))->out(false),
             'adopted' => false,
         ];
@@ -265,8 +282,10 @@ class task_view_page implements renderable, templatable {
             'isexecution' => $item->type === agenda::TYPE_EXECUTION,
             'isdeletion' => $item->type === agenda::TYPE_DELETION,
             'isprune' => $item->type === agenda::TYPE_PRUNE,
-            'label' => get_string($labels[$item->type] ?? 'agenda_exec_label',
-                'local_coursetransfermanager'),
+            'label' => get_string(
+                $labels[$item->type] ?? 'agenda_exec_label',
+                'local_coursetransfermanager'
+            ),
             'date' => userdate((int) $item->date),
             'relative' => format_time(max(0, (int) $item->date - $this->now)),
             'what' => s((string) ($item->resolvedpattern ?? $item->categoryname ?? '')),

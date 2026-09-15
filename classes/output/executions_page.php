@@ -45,7 +45,6 @@ use templatable;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class executions_page implements renderable, templatable {
-
     /** @var stdClass|null Scope task, null for the global view. */
     private ?stdClass $task;
 
@@ -90,8 +89,18 @@ class executions_page implements renderable, templatable {
      * @param int $perpage Page size.
      * @param int $now Reference timestamp.
      */
-    public function __construct(?stdClass $task, array $live, array $agendaitems, stdClass $history,
-            stdClass $counts, array $filters, array $taskoptions, int $page, int $perpage, int $now) {
+    public function __construct(
+        ?stdClass $task,
+        array $live,
+        array $agendaitems,
+        stdClass $history,
+        stdClass $counts,
+        array $filters,
+        array $taskoptions,
+        int $page,
+        int $perpage,
+        int $now
+    ) {
         $this->task = $task;
         $this->live = $live;
         $this->agendaitems = $agendaitems;
@@ -250,8 +259,11 @@ class executions_page implements renderable, templatable {
                 'day' => userdate($item->date, '%d'),
                 'month' => userdate($item->date, '%b'),
                 'datefull' => userdate($item->date),
-                'relative' => get_string('relative_in', 'local_coursetransfermanager',
-                    format_time(max(0, $item->date - $this->now))),
+                'relative' => get_string(
+                    'relative_in',
+                    'local_coursetransfermanager',
+                    format_time(max(0, $item->date - $this->now))
+                ),
                 'taskname' => format_string($item->taskname),
                 'resolvedpattern' => s($item->resolvedpattern),
             ];
@@ -279,8 +291,11 @@ class executions_page implements renderable, templatable {
                 'categoryname' => format_string((string)$item->categoryname),
                 'taskname' => format_string($item->taskname),
                 'date' => userdate($item->date),
-                'relative' => get_string('relative_in', 'local_coursetransfermanager',
-                    format_time(max(0, $item->date - $this->now))),
+                'relative' => get_string(
+                    'relative_in',
+                    'local_coursetransfermanager',
+                    format_time(max(0, $item->date - $this->now))
+                ),
                 'urgent' => $urgent && $item->type === agenda::TYPE_DELETION,
             ];
         }

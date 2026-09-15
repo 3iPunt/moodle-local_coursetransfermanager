@@ -28,7 +28,6 @@ use local_coursetransfermanager\manager\task_manager;
  * @covers     \local_coursetransfermanager\manager\task_manager
  */
 final class task_manager_test extends \advanced_testcase {
-
     /**
      * R3 — while the emergency switch is on, nothing destructive runs and
      * every due date slides forward, so lifting the pause never triggers an

@@ -27,7 +27,6 @@ use local_coursetransfermanager\manager\schedule;
  * @covers     \local_coursetransfermanager\manager\schedule
  */
 final class schedule_test extends \advanced_testcase {
-
     /**
      * A yearly expression resolves to the exact next 1st of September.
      */

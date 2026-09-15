@@ -22,7 +22,6 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
 
 /**
  * Run upgrade steps for this plugin.
@@ -249,7 +248,7 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
             $DB->set_field_select('local_ctm_tasks', 'usercreated', $admin->id, 'usercreated = 0');
         }
 
-        // add_key has no exists-guard: probe the backing index so a re-run does not duplicate it.
+        // The add_key call has no exists-guard: probe the backing index so a re-run does not duplicate it.
         $keyindex = new xmldb_index('usercreated_fk', XMLDB_INDEX_NOTUNIQUE, ['usercreated']);
         if (!$dbman->index_exists($table, $keyindex)) {
             $key = new xmldb_key('usercreated_fk', XMLDB_KEY_FOREIGN, ['usercreated'], 'user', ['id']);
@@ -270,8 +269,16 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
             $dbman->add_field($table, $field);
         }
 
-        $field = new xmldb_field('destinationcategoryid', XMLDB_TYPE_INTEGER, '10', null, null, null, null,
-            'origincategoryidnumber');
+        $field = new xmldb_field(
+            'destinationcategoryid',
+            XMLDB_TYPE_INTEGER,
+            '10',
+            null,
+            null,
+            null,
+            null,
+            'origincategoryidnumber'
+        );
         if (!$dbman->field_exists($table, $field)) {
             $dbman->add_field($table, $field);
         }
@@ -347,8 +354,16 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
         $table = new xmldb_table('local_ctm_tasks');
 
         // P — academic years kept in the origin platform.
-        $field = new xmldb_field('originkeepyears', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '2',
-            'retentiondays');
+        $field = new xmldb_field(
+            'originkeepyears',
+            XMLDB_TYPE_INTEGER,
+            '10',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '2',
+            'retentiondays'
+        );
         if (!$dbman->field_exists($table, $field)) {
             $dbman->add_field($table, $field);
         }
@@ -356,10 +371,10 @@ function xmldb_local_coursetransfermanager_upgrade($oldversion): bool {
         // The pattern becomes a naming MASK: it no longer resolves to one year, it
         // recognises every yearly category. Existing patterns are normalised:
         // - regex anchors (^ $) were meaningful for the old exact match; as a mask
-        //   they would be literal characters, so they go.
+        // they would be literal characters, so they go.
         // - {PREVYEAR}-{YEAR} described "course starting the previous year"; as a
-        //   mask the starting year must be the first one, hence {YEAR}-{NEXTYEAR}.
-        //   Without this the whole policy would sit one year off.
+        // mask the starting year must be the first one, hence {YEAR}-{NEXTYEAR}.
+        // Without this the whole policy would sit one year off.
         foreach ($DB->get_records('local_ctm_tasks', null, '', 'id, categorypattern') as $task) {
             $mask = (string) $task->categorypattern;
             $mask = trim($mask);

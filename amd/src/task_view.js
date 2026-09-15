@@ -33,6 +33,24 @@ define([
     var taskid = 0;
 
     /**
+     * Send the adoption change and reload the page.
+     *
+     * @param {Number} categoryid Category id.
+     * @param {Boolean} adopt True to adopt, false to stop managing.
+     */
+    var applyAdoption = function(categoryid, adopt) {
+        Ajax.call([{
+            methodname: 'local_coursetransfermanager_set_adoption',
+            args: {taskid: taskid, categoryid: categoryid, adopt: adopt},
+        }])[0].then(function() {
+            // The lists, the projection and the pruning all change at once:
+            // a reload is the honest way to show the new state.
+            window.location.reload();
+            return null;
+        }).catch(Notification.exception);
+    };
+
+    /**
      * Adopt or release one category, after confirming it.
      *
      * @param {Number} categoryid Category id.
@@ -48,15 +66,7 @@ define([
             {key: 'cancel', component: 'moodle'},
         ]).then(function(strings) {
             return Notification.confirm(strings[0], strings[1], strings[2], strings[3], function() {
-                Ajax.call([{
-                    methodname: 'local_coursetransfermanager_set_adoption',
-                    args: {taskid: taskid, categoryid: categoryid, adopt: adopt},
-                }])[0].then(function() {
-                    // The lists, the projection and the pruning all change at once:
-                    // a reload is the honest way to show the new state.
-                    window.location.reload();
-                    return null;
-                }).catch(Notification.exception);
+                applyAdoption(categoryid, adopt);
             });
         }).catch(Notification.exception);
     };

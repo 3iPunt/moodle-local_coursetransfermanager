@@ -32,7 +32,6 @@ use stdClass;
  * @covers     \local_coursetransfermanager\manager\rotation
  */
 final class rotation_test extends \advanced_testcase {
-
     /**
      * A task draft with the policy under test.
      *
@@ -42,8 +41,12 @@ final class rotation_test extends \advanced_testcase {
      * @param int $targetcategoryid Archive category id.
      * @return stdClass
      */
-    private function task(int $originkeep, int $destinationkeep,
-            string $mask = 'CAT-{YEAR}-{NEXTYEAR}', int $targetcategoryid = 0): stdClass {
+    private function task(
+        int $originkeep,
+        int $destinationkeep,
+        string $mask = 'CAT-{YEAR}-{NEXTYEAR}',
+        int $targetcategoryid = 0
+    ): stdClass {
         return (object) [
             'id' => 0,
             'originsiteid' => 0,
@@ -57,6 +60,7 @@ final class rotation_test extends \advanced_testcase {
     /**
      * September 2026: the running course is 2026/27.
      *
+     * @param int $year Academic year the date belongs to.
      * @return int
      */
     private function september(int $year = 2026): int {

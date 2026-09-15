@@ -49,9 +49,8 @@ use core_privacy\local\request\writer;
  */
 class provider implements
     \core_privacy\local\metadata\provider,
-    \core_privacy\local\request\plugin\provider,
-    \core_privacy\local\request\core_userlist_provider {
-
+    \core_privacy\local\request\core_userlist_provider,
+    \core_privacy\local\request\plugin\provider {
     /**
      * Describe the user data stored by the plugin.
      *
@@ -118,16 +117,28 @@ class provider implements
             return;
         }
 
-        $userlist->add_from_sql('usercreated',
-            'SELECT usercreated FROM {local_ctm_tasks} WHERE usercreated > 0', []);
-        $userlist->add_from_sql('deletecancelledby',
-            'SELECT deletecancelledby FROM {local_ctm_executions} WHERE deletecancelledby IS NOT NULL', []);
-        $userlist->add_from_sql('excludedby',
-            'SELECT excludedby FROM {local_ctm_prune} WHERE excludedby IS NOT NULL', []);
+        $userlist->add_from_sql(
+            'usercreated',
+            'SELECT usercreated FROM {local_ctm_tasks} WHERE usercreated > 0',
+            []
+        );
+        $userlist->add_from_sql(
+            'deletecancelledby',
+            'SELECT deletecancelledby FROM {local_ctm_executions} WHERE deletecancelledby IS NOT NULL',
+            []
+        );
+        $userlist->add_from_sql(
+            'excludedby',
+            'SELECT excludedby FROM {local_ctm_prune} WHERE excludedby IS NOT NULL',
+            []
+        );
 
         // Recipients are stored as a comma-separated list; expand them in PHP.
-        $lists = $DB->get_fieldset_select('local_ctm_tasks', 'notifyrecipients',
-            $DB->sql_isnotempty('local_ctm_tasks', 'notifyrecipients', true, true));
+        $lists = $DB->get_fieldset_select(
+            'local_ctm_tasks',
+            'notifyrecipients',
+            $DB->sql_isnotempty('local_ctm_tasks', 'notifyrecipients', true, true)
+        );
         $recipients = [];
         foreach ($lists as $list) {
             foreach (explode(',', (string) $list) as $id) {
@@ -165,7 +176,7 @@ class provider implements
         $subcontext = [get_string('pluginname', 'local_coursetransfermanager')];
         $data = new \stdClass();
 
-        $data->taskscreated = array_values(array_map(static function(\stdClass $task): array {
+        $data->taskscreated = array_values(array_map(static function (\stdClass $task): array {
             return [
                 'name' => $task->name,
                 'timecreated' => transform::datetime($task->timecreated),
@@ -173,18 +184,26 @@ class provider implements
         }, $DB->get_records('local_ctm_tasks', ['usercreated' => $userid], 'id', 'id, name, timecreated')));
 
         $params = ['pattern' => '%,' . $userid . ',%'];
-        $data->notificationrecipientof = $DB->get_fieldset_select('local_ctm_tasks', 'name',
-            $DB->sql_like($DB->sql_concat("','", 'notifyrecipients', "','"), ':pattern'), $params);
+        $data->notificationrecipientof = $DB->get_fieldset_select(
+            'local_ctm_tasks',
+            'name',
+            $DB->sql_like($DB->sql_concat("','", 'notifyrecipients', "','"), ':pattern'),
+            $params
+        );
 
-        $data->deletionscancelled = array_values(array_map(static function(\stdClass $execution): array {
+        $data->deletionscancelled = array_values(array_map(static function (\stdClass $execution): array {
             return [
                 'category' => (string) $execution->origincategoryname,
                 'cancelledat' => transform::datetime($execution->deletecancelledat),
             ];
-        }, $DB->get_records('local_ctm_executions', ['deletecancelledby' => $userid], 'id',
-            'id, origincategoryname, deletecancelledat')));
+        }, $DB->get_records(
+            'local_ctm_executions',
+            ['deletecancelledby' => $userid],
+            'id',
+            'id, origincategoryname, deletecancelledat'
+        )));
 
-        $data->pruningexclusions = array_values(array_map(static function(\stdClass $candidate): array {
+        $data->pruningexclusions = array_values(array_map(static function (\stdClass $candidate): array {
             return [
                 'category' => (string) $candidate->categoryname,
                 'excludedat' => transform::datetime($candidate->excludedat),
@@ -262,15 +281,23 @@ class provider implements
 
         // Remove the user from every comma-separated recipient list.
         $params = ['pattern' => '%,' . $userid . ',%'];
-        $tasks = $DB->get_records_select('local_ctm_tasks',
+        $tasks = $DB->get_records_select(
+            'local_ctm_tasks',
             $DB->sql_like($DB->sql_concat("','", 'notifyrecipients', "','"), ':pattern'),
-            $params, 'id', 'id, notifyrecipients');
+            $params,
+            'id',
+            'id, notifyrecipients'
+        );
         foreach ($tasks as $task) {
-            $ids = array_filter(explode(',', (string) $task->notifyrecipients), static function(string $id) use ($userid): bool {
+            $ids = array_filter(explode(',', (string) $task->notifyrecipients), static function (string $id) use ($userid): bool {
                 return (int) $id > 0 && (int) $id !== $userid;
             });
-            $DB->set_field('local_ctm_tasks', 'notifyrecipients', $ids ? implode(',', $ids) : null,
-                ['id' => $task->id]);
+            $DB->set_field(
+                'local_ctm_tasks',
+                'notifyrecipients',
+                $ids ? implode(',', $ids) : null,
+                ['id' => $task->id]
+            );
         }
     }
 }

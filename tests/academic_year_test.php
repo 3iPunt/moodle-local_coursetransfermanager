@@ -27,7 +27,6 @@ use local_coursetransfermanager\manager\academic_year;
  * @covers     \local_coursetransfermanager\manager\academic_year
  */
 final class academic_year_test extends \advanced_testcase {
-
     /**
      * The three formats the client uses all resolve to the same starting year.
      */

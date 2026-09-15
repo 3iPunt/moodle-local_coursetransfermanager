@@ -51,7 +51,6 @@ use local_coursetransfermanager\manager\task_manager;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class wizard_external extends external_api {
-
     /**
      * Common security gate for every wizard endpoint.
      *
@@ -177,12 +176,24 @@ class wizard_external extends external_api {
             'pattern' => new external_value(PARAM_RAW_TRIMMED, 'Naming mask'),
             'originkeepyears' => new external_value(PARAM_INT, 'Academic years kept in the origin'),
             'destinationkeepyears' => new external_value(PARAM_INT, 'Academic years kept in the archive'),
-            'targetcategoryid' => new external_value(PARAM_INT, 'Archive category, 0 when not chosen yet',
-                VALUE_DEFAULT, 0),
-            'withorigin' => new external_value(PARAM_BOOL,
-                'Ask the origin which years exist there (one HTTP round trip)', VALUE_DEFAULT, false),
-            'taskid' => new external_value(PARAM_INT,
-                'Existing task, so the projection can tell facts from projections', VALUE_DEFAULT, 0),
+            'targetcategoryid' => new external_value(
+                PARAM_INT,
+                'Archive category, 0 when not chosen yet',
+                VALUE_DEFAULT,
+                0
+            ),
+            'withorigin' => new external_value(
+                PARAM_BOOL,
+                'Ask the origin which years exist there (one HTTP round trip)',
+                VALUE_DEFAULT,
+                false
+            ),
+            'taskid' => new external_value(
+                PARAM_INT,
+                'Existing task, so the projection can tell facts from projections',
+                VALUE_DEFAULT,
+                0
+            ),
         ]);
     }
 
@@ -201,9 +212,15 @@ class wizard_external extends external_api {
      * @param int $taskid Existing task id, 0 while creating one.
      * @return array Projection rows plus the thresholds behind them.
      */
-    public static function policy_preview(int $siteid, string $pattern, int $originkeepyears,
-            int $destinationkeepyears, int $targetcategoryid = 0, bool $withorigin = false,
-            int $taskid = 0): array {
+    public static function policy_preview(
+        int $siteid,
+        string $pattern,
+        int $originkeepyears,
+        int $destinationkeepyears,
+        int $targetcategoryid = 0,
+        bool $withorigin = false,
+        int $taskid = 0
+    ): array {
         $params = self::validate_parameters(self::policy_preview_parameters(), [
             'siteid' => $siteid,
             'pattern' => $pattern,
@@ -225,8 +242,10 @@ class wizard_external extends external_api {
             'rows' => [],
         ];
 
-        if (!academic_year::is_valid_mask($params['pattern'])
-                || $params['originkeepyears'] < 1 || $params['destinationkeepyears'] < 1) {
+        if (
+            !academic_year::is_valid_mask($params['pattern'])
+                || $params['originkeepyears'] < 1 || $params['destinationkeepyears'] < 1
+        ) {
             return $result;
         }
 
@@ -349,8 +368,11 @@ class wizard_external extends external_api {
             $summer = $summer || in_array($month, [6, 7, 8], true);
             $runs[] = [
                 'date' => userdate($timestamp),
-                'relative' => get_string('relative_in', 'local_coursetransfermanager',
-                    format_time(max(0, $timestamp - $now))),
+                'relative' => get_string(
+                    'relative_in',
+                    'local_coursetransfermanager',
+                    format_time(max(0, $timestamp - $now))
+                ),
             ];
         }
 
@@ -400,9 +422,15 @@ class wizard_external extends external_api {
         $results = [];
         if (core_text::strlen($params['query']) >= 2) {
             $like = $DB->sql_like('name', ':query', false, false);
-            $records = $DB->get_records_select('course_categories', $like,
+            $records = $DB->get_records_select(
+                'course_categories',
+                $like,
                 ['query' => '%' . $DB->sql_like_escape($params['query']) . '%'],
-                'depth ASC, sortorder ASC', 'id', 0, 30);
+                'depth ASC, sortorder ASC',
+                'id',
+                0,
+                30
+            );
             foreach ($records as $record) {
                 $category = core_course_category::get((int)$record->id, IGNORE_MISSING);
                 if (!$category || !$category->has_manage_capability()) {
@@ -466,9 +494,16 @@ class wizard_external extends external_api {
                 . ' OR ' . $DB->sql_like('email', ':q2', false, false) . ')'
                 . ' AND deleted = 0 AND suspended = 0 AND confirmed = 1 AND id > 1';
             $escaped = '%' . $DB->sql_like_escape($params['query']) . '%';
-            $users = $DB->get_records_select('user', $where, ['q1' => $escaped, 'q2' => $escaped],
-                'lastname ASC, firstname ASC', 'id, firstname, lastname, email, firstnamephonetic,
-                 lastnamephonetic, middlename, alternatename', 0, 30);
+            $users = $DB->get_records_select(
+                'user',
+                $where,
+                ['q1' => $escaped, 'q2' => $escaped],
+                'lastname ASC, firstname ASC',
+                'id, firstname, lastname, email, firstnamephonetic,
+                 lastnamephonetic, middlename, alternatename',
+                0,
+                30
+            );
             foreach ($users as $user) {
                 $results[] = [
                     'id' => (int)$user->id,
@@ -515,7 +550,10 @@ class wizard_external extends external_api {
             'restoreuserdata' => new external_value(PARAM_BOOL, 'Copy user data'),
             'notifylevel' => new external_value(PARAM_ALPHA, 'full or essential'),
             'notifyrecipients' => new external_multiple_structure(
-                new external_value(PARAM_INT, 'User id'), 'Additional recipients', VALUE_DEFAULT, []
+                new external_value(PARAM_INT, 'User id'),
+                'Additional recipients',
+                VALUE_DEFAULT,
+                []
             ),
         ]);
     }
@@ -527,6 +565,7 @@ class wizard_external extends external_api {
      * @param string $name Task name.
      * @param int $originsiteid Origin site id.
      * @param string $categorypattern Category pattern.
+     * @param int $originkeepyears Years kept in the origin platform.
      * @param int $targetcategoryid Destination parent category id.
      * @param string $cronexpression Cron expression.
      * @param int $retentiondays Origin retention days.
@@ -537,10 +576,20 @@ class wizard_external extends external_api {
      * @return array
      * @throws invalid_parameter_exception On any validation failure.
      */
-    public static function task_save(int $id, string $name, int $originsiteid, string $categorypattern,
-            int $originkeepyears, int $targetcategoryid, string $cronexpression, int $retentiondays,
-            int $destinationkeepyears,
-            bool $restoreuserdata, string $notifylevel, array $notifyrecipients = []): array {
+    public static function task_save(
+        int $id,
+        string $name,
+        int $originsiteid,
+        string $categorypattern,
+        int $originkeepyears,
+        int $targetcategoryid,
+        string $cronexpression,
+        int $retentiondays,
+        int $destinationkeepyears,
+        bool $restoreuserdata,
+        string $notifylevel,
+        array $notifyrecipients = []
+    ): array {
         global $DB;
 
         $params = self::validate_parameters(self::task_save_parameters(), [

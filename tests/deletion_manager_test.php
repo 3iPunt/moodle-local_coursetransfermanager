@@ -31,7 +31,6 @@ use local_coursetransfermanager\manager\deletion_manager;
  * @covers     \local_coursetransfermanager\manager\deletion_manager
  */
 final class deletion_manager_test extends \advanced_testcase {
-
     /**
      * Seed a task and one execution with a scheduled origin deletion.
      *
@@ -175,8 +174,10 @@ final class deletion_manager_test extends \advanced_testcase {
 
         // A cancelled deletion is never due for execution.
         $this->assertCount(0, deletion_manager::process_due(time() + 30 * DAYSECS));
-        $this->assertSame(deletion_manager::STATUS_CANCELLED,
-            $DB->get_field('local_ctm_executions', 'deletestatus', ['id' => $execution->id]));
+        $this->assertSame(
+            deletion_manager::STATUS_CANCELLED,
+            $DB->get_field('local_ctm_executions', 'deletestatus', ['id' => $execution->id])
+        );
 
         // And it cannot be cancelled again.
         $this->expectException(\moodle_exception::class);

@@ -36,11 +36,10 @@ use templatable;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class renderer extends plugin_renderer_base {
-
     /**
      * Render a templatable renderable with its own template.
      *
-     * @param renderable&templatable $page The page renderable.
+     * @param renderable $page The page renderable, which must also be templatable.
      * @param string $template Template name (component/template).
      * @return string HTML.
      */

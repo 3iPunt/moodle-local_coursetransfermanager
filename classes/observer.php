@@ -40,7 +40,6 @@ use local_coursetransfermanager\notification\notifier;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class observer {
-
     /**
      * A coursetransfer request reached COMPLETED.
      *

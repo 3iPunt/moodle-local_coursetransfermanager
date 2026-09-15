@@ -43,7 +43,6 @@ use stdClass;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class health {
-
     /** @var string Check is fine. */
     public const OK = 'ok';
 

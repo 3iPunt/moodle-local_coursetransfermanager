@@ -28,7 +28,6 @@ use local_coursetransfermanager\manager\deletion_manager;
  * @covers     \local_coursetransfermanager\external\task_external
  */
 final class task_external_test extends \advanced_testcase {
-
     /**
      * Seed a task, optionally with a recent successful execution.
      *
@@ -124,8 +123,10 @@ final class task_external_test extends \advanced_testcase {
         $result = task_external::cancel_deletion($executionid);
         $this->assertTrue($result['cancelled']);
         $this->assertNotEmpty($result['audit']);
-        $this->assertSame(deletion_manager::STATUS_CANCELLED,
-            $DB->get_field('local_ctm_executions', 'deletestatus', ['id' => $executionid]));
+        $this->assertSame(
+            deletion_manager::STATUS_CANCELLED,
+            $DB->get_field('local_ctm_executions', 'deletestatus', ['id' => $executionid])
+        );
     }
 
     /**
@@ -151,19 +152,25 @@ final class task_external_test extends \advanced_testcase {
             task_external::set_adoption($taskid, (int)$elsewhere->id, true);
             $this->fail('Expected moodle_exception for a category outside the archive');
         } catch (\moodle_exception $e) {
-            $this->assertFalse($DB->record_exists('local_ctm_adopted',
-                ['taskid' => $taskid, 'categoryid' => $elsewhere->id]));
+            $this->assertFalse($DB->record_exists(
+                'local_ctm_adopted',
+                ['taskid' => $taskid, 'categoryid' => $elsewhere->id]
+            ));
         }
 
         $result = task_external::set_adoption($taskid, (int)$yearly->id, true);
         $this->assertTrue($result['adopted']);
         $this->assertNotEmpty($result['audit']);
-        $this->assertTrue($DB->record_exists('local_ctm_adopted',
-            ['taskid' => $taskid, 'categoryid' => $yearly->id]));
+        $this->assertTrue($DB->record_exists(
+            'local_ctm_adopted',
+            ['taskid' => $taskid, 'categoryid' => $yearly->id]
+        ));
 
         $released = task_external::set_adoption($taskid, (int)$yearly->id, false);
         $this->assertFalse($released['adopted']);
-        $this->assertFalse($DB->record_exists('local_ctm_adopted',
-            ['taskid' => $taskid, 'categoryid' => $yearly->id]));
+        $this->assertFalse($DB->record_exists(
+            'local_ctm_adopted',
+            ['taskid' => $taskid, 'categoryid' => $yearly->id]
+        ));
     }
 }

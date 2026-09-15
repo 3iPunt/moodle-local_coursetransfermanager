@@ -187,6 +187,22 @@ define([
     };
 
     /**
+     * Tone of the pattern box for a given service status.
+     *
+     * @param {String} status Status returned by test_pattern.
+     * @return {String} Tone name used by the .ct-patbox modifier.
+     */
+    var patternTone = function(status) {
+        if (status === 'ok') {
+            return 'success';
+        }
+        if (status === 'none') {
+            return 'warning';
+        }
+        return 'danger';
+    };
+
+    /**
      * Ask the origin which yearly categories the mask recognises.
      *
      * The mask is not expected to match one category: it must recognise the whole
@@ -194,11 +210,14 @@ define([
      */
     var testPattern = function() {
         var result = region('pattern-result');
+        var outcome = null;
+
         Str.get_string('wz_pat_loading', 'local_coursetransfermanager').then(function(loading) {
             result.innerHTML = '<div class="ct-patbox"><i class="fa fa-spinner fa-spin" aria-hidden="true"></i> '
                 + esc(loading) + '</div>';
             return call('test_pattern', {siteid: state.originsiteid, pattern: state.categorypattern});
         }).then(function(response) {
+            outcome = response;
             var keys = {
                 ok: ['wz_pat_ok', 'wz_pat_ok_hint'],
                 none: ['wz_pat_none', 'wz_pat_none_hint'],
@@ -218,31 +237,72 @@ define([
                 {key: 'wz_pat_courses', component: 'local_coursetransfermanager'},
                 {key: 'wz_pat_more', component: 'local_coursetransfermanager',
                     param: Math.max(0, response.matchcount - response.categories.length)},
-            ]).then(function(strings) {
-                var tone = response.status === 'ok' ? 'success'
-                    : (response.status === 'none' ? 'warning' : 'danger');
-                var detail = '';
-                if (response.categories.length) {
-                    detail = '<ul class="ct-patbox-list">'
-                        + response.categories.map(function(category) {
-                            return '<li><span class="ct-badge ct-badge--neutral">' + esc(category.label)
-                                + '</span> <code>' + esc(category.idnumber) + '</code> '
-                                + '<span class="ct-text-muted">' + esc(category.name) + ' · '
-                                + category.courses + ' ' + esc(strings[2]) + '</span></li>';
-                        }).join('')
-                        + '</ul>';
-                    if (response.matchcount > response.categories.length) {
-                        detail += '<p class="ct-text-muted">' + esc(strings[3]) + '</p>';
-                    }
+            ]);
+        }).then(function(strings) {
+            var tone = patternTone(outcome.status);
+            var detail = '';
+            if (outcome.categories.length) {
+                detail = '<ul class="ct-patbox-list">'
+                    + outcome.categories.map(function(category) {
+                        return '<li><span class="ct-badge ct-badge--neutral">' + esc(category.label)
+                            + '</span> <code>' + esc(category.idnumber) + '</code> '
+                            + '<span class="ct-text-muted">' + esc(category.name) + ' · '
+                            + category.courses + ' ' + esc(strings[2]) + '</span></li>';
+                    }).join('')
+                    + '</ul>';
+                if (outcome.matchcount > outcome.categories.length) {
+                    detail += '<p class="ct-text-muted">' + esc(strings[3]) + '</p>';
                 }
-                result.innerHTML = '<div class="ct-patbox ct-patbox--' + tone + '"><strong>' + esc(strings[0])
-                    + '</strong>' + detail + '<p>' + esc(strings[1]) + '</p></div>';
-                return null;
-            });
+            }
+            result.innerHTML = '<div class="ct-patbox ct-patbox--' + tone + '"><strong>' + esc(strings[0])
+                + '</strong>' + detail + '<p>' + esc(strings[1]) + '</p></div>';
+            return null;
         }).catch(Notification.exception);
     };
 
     // ---- Step 2: destination --------------------------------------------
+
+    /**
+     * Tell the user that the search returned nothing.
+     *
+     * @param {HTMLElement} drop The dropdown node.
+     * @param {String} query The text searched for.
+     * @return {Promise} Resolved once the notice is shown.
+     */
+    var showNoResults = function(drop, query) {
+        return Str.get_string('wz_noresults', 'local_coursetransfermanager', query).then(function(empty) {
+            drop.innerHTML = '<div class="ct-ac-note">' + esc(empty) + '</div>';
+            return null;
+        });
+    };
+
+    /**
+     * Report a cron expression the service could not parse.
+     *
+     * @param {HTMLElement} box The preview box.
+     * @return {Promise} Resolved once the notice is shown.
+     */
+    var showInvalidCron = function(box) {
+        return Str.get_string('invalidcron', 'local_coursetransfermanager').then(function(text) {
+            box.hidden = false;
+            region('sched-preview-body').innerHTML = '<div class="ct-patbox ct-patbox--danger">'
+                + esc(text) + '</div>';
+            return null;
+        });
+    };
+
+    /**
+     * Fill in the description of the final step with the first scheduled run.
+     *
+     * @param {String} firstrun First run, already formatted by the service.
+     * @return {Promise} Resolved once the description is shown.
+     */
+    var showDoneDescription = function(firstrun) {
+        return Str.get_string('wz_done_desc', 'local_coursetransfermanager', firstrun).then(function(text) {
+            region('done-desc').textContent = text;
+            return null;
+        });
+    };
 
     var wireAutocomplete = function(inputid, dropregion, searcher, renderer, onpick) {
         var input = document.getElementById(inputid);
@@ -263,11 +323,7 @@ define([
                     return searcher(query);
                 }).then(function(items) {
                     if (!items.length) {
-                        return Str.get_string('wz_noresults', 'local_coursetransfermanager', query)
-                            .then(function(empty) {
-                                drop.innerHTML = '<div class="ct-ac-note">' + esc(empty) + '</div>';
-                                return null;
-                            });
+                        return showNoResults(drop, query);
                     }
                     drop.innerHTML = items.map(renderer).join('');
                     drop.querySelectorAll('[data-pick]').forEach(function(node) {
@@ -333,12 +389,7 @@ define([
             if (!response.valid) {
                 box.hidden = true;
                 region('summer-warning').hidden = true;
-                return Str.get_string('invalidcron', 'local_coursetransfermanager').then(function(text) {
-                    box.hidden = false;
-                    region('sched-preview-body').innerHTML = '<div class="ct-patbox ct-patbox--danger">'
-                        + esc(text) + '</div>';
-                    return null;
-                });
+                return showInvalidCron(box);
             }
             box.hidden = false;
             region('sched-preview-body').innerHTML = response.runs.map(function(run) {
@@ -626,11 +677,7 @@ define([
             }
             region('wizard-actions').hidden = true;
             region('step-done').hidden = false;
-            return Str.get_string('wz_done_desc', 'local_coursetransfermanager', response.firstrun)
-                .then(function(text) {
-                    region('done-desc').textContent = text;
-                    return null;
-                });
+            return showDoneDescription(response.firstrun);
         }).catch(function(error) {
             button.disabled = false;
             Notification.exception(error);

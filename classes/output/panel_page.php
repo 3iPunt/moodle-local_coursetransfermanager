@@ -46,7 +46,6 @@ use templatable;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class panel_page implements renderable, templatable {
-
     /** @var stdClass[] Health checks from {@see health::get_checks()}. */
     private array $checks;
 
@@ -78,8 +77,14 @@ class panel_page implements renderable, templatable {
      * @param int $now Reference timestamp.
      * @param bool $deletionspaused Emergency switch state.
      */
-    public function __construct(array $checks, array $agendaitems, array $tasks, array $filters, int $now,
-            bool $deletionspaused = false) {
+    public function __construct(
+        array $checks,
+        array $agendaitems,
+        array $tasks,
+        array $filters,
+        int $now,
+        bool $deletionspaused = false
+    ) {
         $this->checks = $checks;
         $this->agendaitems = $agendaitems;
         $this->tasks = $tasks;
@@ -186,8 +191,11 @@ class panel_page implements renderable, templatable {
                     return get_string('health_managertask_disabled', 'local_coursetransfermanager');
                 }
                 if (!empty($check->data->lastrun)) {
-                    return get_string('health_managertask_ok', 'local_coursetransfermanager',
-                        format_time($this->now - (int)$check->data->lastrun));
+                    return get_string(
+                        'health_managertask_ok',
+                        'local_coursetransfermanager',
+                        format_time($this->now - (int)$check->data->lastrun)
+                    );
                 }
                 return get_string('health_managertask_stale', 'local_coursetransfermanager');
         }
@@ -209,8 +217,11 @@ class panel_page implements renderable, templatable {
                 'day' => userdate($item->date, '%d'),
                 'month' => userdate($item->date, '%b'),
                 'datefull' => userdate($item->date),
-                'relative' => get_string('relative_in', 'local_coursetransfermanager',
-                    format_time(max(0, $item->date - $this->now))),
+                'relative' => get_string(
+                    'relative_in',
+                    'local_coursetransfermanager',
+                    format_time(max(0, $item->date - $this->now))
+                ),
                 'isexecution' => $item->type === agenda::TYPE_EXECUTION,
                 'isdeletion' => $item->type === agenda::TYPE_DELETION,
                 'isprune' => $item->type === agenda::TYPE_PRUNE,
@@ -227,15 +238,24 @@ class panel_page implements renderable, templatable {
                 ]);
             } else if ($item->type === agenda::TYPE_DELETION) {
                 $deletions++;
-                $exported['title'] = get_string('agenda_category', 'local_coursetransfermanager',
-                    format_string($item->categoryname));
-                $exported['detail'] = get_string('agenda_del_detail', 'local_coursetransfermanager',
-                    s((string)$this->task_host($item->taskid)));
+                $exported['title'] = get_string(
+                    'agenda_category',
+                    'local_coursetransfermanager',
+                    format_string($item->categoryname)
+                );
+                $exported['detail'] = get_string(
+                    'agenda_del_detail',
+                    'local_coursetransfermanager',
+                    s((string)$this->task_host($item->taskid))
+                );
                 $exported['executionid'] = $item->executionid;
             } else {
                 $deletions++;
-                $exported['title'] = get_string('agenda_category', 'local_coursetransfermanager',
-                    format_string($item->categoryname));
+                $exported['title'] = get_string(
+                    'agenda_category',
+                    'local_coursetransfermanager',
+                    format_string($item->categoryname)
+                );
                 $exported['detail'] = get_string('agenda_prune_detail', 'local_coursetransfermanager');
                 $exported['pruneid'] = $item->pruneid;
             }
@@ -279,8 +299,10 @@ class panel_page implements renderable, templatable {
             'viewurl' => (new moodle_url('/local/coursetransfermanager/task.php', ['id' => $task->id]))->out(false),
             'editurl' => (new moodle_url('/local/coursetransfermanager/edit.php', ['id' => $task->id]))->out(false),
             'deleteurl' => (new moodle_url('/local/coursetransfermanager/delete.php', ['id' => $task->id]))->out(false),
-            'executionsurl' => (new moodle_url('/local/coursetransfermanager/executions.php',
-                ['taskid' => $task->id]))->out(false),
+            'executionsurl' => (new moodle_url(
+                '/local/coursetransfermanager/executions.php',
+                ['taskid' => $task->id]
+            ))->out(false),
         ];
 
         // Next run, in human words.
@@ -300,8 +322,11 @@ class panel_page implements renderable, templatable {
 
         // Origin platform flagged as down by its last registered test.
         if ($task->originhost !== null && in_array($task->originhost, $this->kohosts, true)) {
-            $exported['originko'] = get_string('card_origin_ko', 'local_coursetransfermanager',
-                s($task->originhost));
+            $exported['originko'] = get_string(
+                'card_origin_ko',
+                'local_coursetransfermanager',
+                s($task->originhost)
+            );
         }
 
         // Latest execution.

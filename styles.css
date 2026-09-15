@@ -14,6 +14,7 @@
     /* Responsive by CONTAINER width (not viewport): the plugin content often sits
        in a narrow column (theme blocks/drawers), so layout must react to its own
        width. See the @container blocks below. */
+    /* stylelint-disable-next-line csstree/validator -- Container queries are valid CSS; the bundled csstree does not know them. */
     container: ctm / inline-size;
     /* Brand (family logo colours: magenta #ea1a7f primary, amber #ffa827 secondary) */
     --magenta-50: #fdeaf3;
@@ -197,7 +198,8 @@
     font-size: 14px;
     cursor: pointer;
     text-decoration: none;
-    transition: background-color var(--dur-fast) var(--ease-standard),
+    transition:
+        background-color var(--dur-fast) var(--ease-standard),
         box-shadow var(--dur-base) var(--ease-standard),
         transform var(--dur-fast) var(--ease-standard);
 }
@@ -1191,6 +1193,7 @@ body.ctm-wide {
 }
 
 /* Narrow: stack each row so nothing is squeezed out of view. */
+/* stylelint-disable-next-line csstree/validator -- Container queries are valid CSS; the bundled csstree does not know them. */
 @container (max-width: 560px) {
     .local-coursetransfermanager .ct-viewlist-item {
         align-items: flex-start;
@@ -1320,6 +1323,7 @@ body.ctm-wide {
 }
 
 /* Stack the legend when there is no room for it in one line. */
+/* stylelint-disable-next-line csstree/validator -- Container queries are valid CSS; the bundled csstree does not know them. */
 @container (max-width: 560px) {
     .local-coursetransfermanager .ct-lifecycle-total {
         margin-inline-start: 0;
@@ -1754,9 +1758,15 @@ body.ctm-wide {
 }
 
 @keyframes ctmpulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.35; }
-    100% { opacity: 1; }
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.35;
+    }
+    100% {
+        opacity: 1;
+    }
 }
 
 .local-coursetransfermanager .ct-livecard {
@@ -1950,6 +1960,7 @@ body.ctm-wide {
 }
 
 /* ---- Container-responsive base (mobile-first stacking) ---- */
+/* stylelint-disable-next-line csstree/validator -- Container queries are valid CSS; the bundled csstree does not know them. */
 @container ctm (max-width: 720px) {
     .local-coursetransfermanager .ct-hero {
         flex-direction: column;

@@ -89,6 +89,28 @@ define([
     };
 
     /**
+     * Send the cancellation (or the pruning exclusion) and mark the card as done.
+     *
+     * @param {HTMLElement} button Action button.
+     * @param {Boolean} isprune True for pruning exclusions.
+     */
+    var applyCancellation = function(button, isprune) {
+        var promise = isprune
+            ? call('prune_exclude', {pruneid: parseInt(button.dataset.pruneid, 10)})
+            : call('deletion_cancel', {executionid: parseInt(button.dataset.executionid, 10)});
+
+        promise.then(function(response) {
+            var card = button.closest('.ct-delcard');
+            var actions = card.querySelector('[data-region="delcard-actions"]');
+            card.classList.add('ct-delcard--cancelled');
+            actions.innerHTML = '<span class="ct-agenda-audit">'
+                + '<i class="fa fa-check" aria-hidden="true"></i> '
+                + response.audit + '</span>';
+            return null;
+        }).catch(Notification.exception);
+    };
+
+    /**
      * Confirm and cancel a pending deletion (or exclude a pruning candidate).
      *
      * @param {HTMLElement} button Action button.
@@ -117,23 +139,12 @@ define([
                 body: strings[1],
                 buttons: {save: strings[2]},
                 show: true,
-            }).then(function(modal) {
-                modal.getRoot().on(ModalEvents.save, function() {
-                    var promise = isprune
-                        ? call('prune_exclude', {pruneid: parseInt(button.dataset.pruneid, 10)})
-                        : call('deletion_cancel', {executionid: parseInt(button.dataset.executionid, 10)});
-                    promise.then(function(response) {
-                        var card = button.closest('.ct-delcard');
-                        var actions = card.querySelector('[data-region="delcard-actions"]');
-                        card.classList.add('ct-delcard--cancelled');
-                        actions.innerHTML = '<span class="ct-agenda-audit">'
-                            + '<i class="fa fa-check" aria-hidden="true"></i> '
-                            + response.audit + '</span>';
-                        return null;
-                    }).catch(Notification.exception);
-                });
-                return modal;
             });
+        }).then(function(modal) {
+            modal.getRoot().on(ModalEvents.save, function() {
+                applyCancellation(button, isprune);
+            });
+            return modal;
         }).catch(Notification.exception);
     };
 

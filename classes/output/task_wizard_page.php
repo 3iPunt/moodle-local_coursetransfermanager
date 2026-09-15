@@ -43,7 +43,6 @@ use templatable;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class task_wizard_page implements renderable, templatable {
-
     /** @var stdClass|null Task being edited, null when creating. */
     private ?stdClass $task;
 
@@ -86,7 +85,7 @@ class task_wizard_page implements renderable, templatable {
         $data->panel = $data->panelurl;
 
         $now = time();
-        $data->sites = array_map(function(stdClass $site) use ($now): array {
+        $data->sites = array_map(function (stdClass $site) use ($now): array {
             return [
                 'id' => (int)$site->id,
                 'name' => format_string((string)$site->name),

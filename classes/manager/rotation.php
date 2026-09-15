@@ -48,7 +48,6 @@ use stdClass;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class rotation {
-
     /** @var int Default cap of categories archived in a single execution. */
     public const DEFAULT_MAX_PER_TICK = 3;
 
@@ -160,10 +159,15 @@ final class rotation {
      * @param stdClass $task Task record.
      * @param int $years How many academic years to project.
      * @param int|null $time Reference timestamp.
+     * @param bool $readorigin Whether the origin platform is queried for the real categories.
      * @return stdClass[] One row per academic year.
      */
-    public static function project(stdClass $task, int $years = 6, ?int $time = null,
-            bool $readorigin = true): array {
+    public static function project(
+        stdClass $task,
+        int $years = 6,
+        ?int $time = null,
+        bool $readorigin = true
+    ): array {
         $mask = self::mask($task);
         if (!$mask) {
             return [];
@@ -281,11 +285,17 @@ final class rotation {
         }
 
         [$insql, $params] = $DB->get_in_or_equal(
-            [task_manager::STATUS_SUCCESS, task_manager::STATUS_COMPLETED], SQL_PARAMS_NAMED);
+            [task_manager::STATUS_SUCCESS, task_manager::STATUS_COMPLETED],
+            SQL_PARAMS_NAMED
+        );
         $params['taskid'] = $task->id;
 
-        $idnumbers = $DB->get_fieldset_select('local_ctm_executions', 'DISTINCT origincategoryidnumber',
-            "taskid = :taskid AND status $insql AND origincategoryidnumber IS NOT NULL", $params);
+        $idnumbers = $DB->get_fieldset_select(
+            'local_ctm_executions',
+            'DISTINCT origincategoryidnumber',
+            "taskid = :taskid AND status $insql AND origincategoryidnumber IS NOT NULL",
+            $params
+        );
 
         $years = [];
         foreach ($idnumbers as $idnumber) {
@@ -398,10 +408,18 @@ final class rotation {
     public static function managed_category_ids(stdClass $task): array {
         global $DB;
 
-        $created = $DB->get_fieldset_select('local_ctm_executions', 'DISTINCT destinationcategoryid',
-            'taskid = :taskid AND destinationcategoryid IS NOT NULL', ['taskid' => $task->id]);
-        $adopted = $DB->get_fieldset_select('local_ctm_adopted', 'categoryid',
-            'taskid = :taskid', ['taskid' => $task->id]);
+        $created = $DB->get_fieldset_select(
+            'local_ctm_executions',
+            'DISTINCT destinationcategoryid',
+            'taskid = :taskid AND destinationcategoryid IS NOT NULL',
+            ['taskid' => $task->id]
+        );
+        $adopted = $DB->get_fieldset_select(
+            'local_ctm_adopted',
+            'categoryid',
+            'taskid = :taskid',
+            ['taskid' => $task->id]
+        );
 
         return array_values(array_unique(array_map('intval', array_merge($created, $adopted))));
     }
@@ -450,6 +468,12 @@ final class rotation {
         return $categories;
     }
 
+    /**
+     * Archive categories already managed by this task, with their academic year resolved.
+     *
+     * @param stdClass $task Rotation task record.
+     * @return array Category records with id, name, idnumber, parent and year.
+     */
     private static function managed_archive_categories(stdClass $task): array {
         global $DB;
 
@@ -460,8 +484,13 @@ final class rotation {
         }
 
         [$insql, $params] = $DB->get_in_or_equal($managed, SQL_PARAMS_NAMED);
-        $records = $DB->get_records_select('course_categories', "id $insql", $params, 'id',
-            'id, name, idnumber, parent');
+        $records = $DB->get_records_select(
+            'course_categories',
+            "id $insql",
+            $params,
+            'id',
+            'id, name, idnumber, parent'
+        );
 
         $categories = [];
         foreach ($records as $record) {

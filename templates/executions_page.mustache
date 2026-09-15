@@ -24,7 +24,7 @@
   Context variables: see executions_page::export_for_template.
 
   Example context (json):
-  { "headertitle": "Ejecuciones y borrados", "counts": {"live": 0, "deletions": 0}, "live": [], "history": [] }
+  { "baseurl": "https://example.com/local/coursetransfermanager/executions.php", "headertitle": "Ejecuciones y borrados", "counts": {"live": 0, "deletions": 0}, "live": [], "history": [] }
 }}
 <div class="local-coursetransfermanager" id="ctm-executions">
 
@@ -43,15 +43,15 @@
     {{/scoped}}
 
     <div class="ct-tabs" role="tablist" data-region="tabs">
-        <button type="button" class="ct-tab" data-action="tab" data-tab="live" aria-selected="true">
+        <button type="button" role="tab" class="ct-tab" data-action="tab" data-tab="live" aria-selected="true">
             {{#str}} exec_tab_live, local_coursetransfermanager {{/str}}
             {{#counts.live}}<span class="ct-tabcount">{{ counts.live }}</span>{{/counts.live}}
         </button>
-        <button type="button" class="ct-tab" data-action="tab" data-tab="deletions" aria-selected="false">
+        <button type="button" role="tab" class="ct-tab" data-action="tab" data-tab="deletions" aria-selected="false">
             {{#str}} exec_tab_deletions, local_coursetransfermanager {{/str}}
             {{#counts.deletions}}<span class="ct-tabcount ct-tabcount--warning">{{ counts.deletions }}</span>{{/counts.deletions}}
         </button>
-        <button type="button" class="ct-tab" data-action="tab" data-tab="history" aria-selected="false">
+        <button type="button" role="tab" class="ct-tab" data-action="tab" data-tab="history" aria-selected="false">
             {{#str}} exec_tab_history, local_coursetransfermanager {{/str}}
         </button>
     </div>

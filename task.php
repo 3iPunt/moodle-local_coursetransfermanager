@@ -51,8 +51,11 @@ $now = time();
 // The archive category name, for the header cells.
 $task->targetcategoryname = null;
 if (!empty($task->targetcategoryid)) {
-    $task->targetcategoryname = $DB->get_field('course_categories', 'name',
-        ['id' => $task->targetcategoryid]);
+    $task->targetcategoryname = $DB->get_field(
+        'course_categories',
+        'name',
+        ['id' => $task->targetcategoryid]
+    );
 }
 
 // The origin host, or null when the platform was unregistered.
@@ -107,8 +110,10 @@ $PAGE->set_heading('');
 // Family layout + wide container (dense screen), see styles.css token.
 $PAGE->set_pagelayout('standard');
 $PAGE->add_body_class('ctm-wide');
-$PAGE->navbar->add(get_string('managetasks', 'local_coursetransfermanager'),
-    new moodle_url('/local/coursetransfermanager/manage.php'));
+$PAGE->navbar->add(
+    get_string('managetasks', 'local_coursetransfermanager'),
+    new moodle_url('/local/coursetransfermanager/manage.php')
+);
 $PAGE->navbar->add(format_string($task->name), $url);
 
 // Render.

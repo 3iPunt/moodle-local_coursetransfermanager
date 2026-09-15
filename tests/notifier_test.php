@@ -29,7 +29,6 @@ use local_coursetransfermanager\notification\notifier;
  * @covers     \local_coursetransfermanager\observer
  */
 final class notifier_test extends \advanced_testcase {
-
     /**
      * Seed a task owned by a creator with one extra recipient.
      *
@@ -108,8 +107,11 @@ final class notifier_test extends \advanced_testcase {
         $seed = $this->seed('essential');
 
         $sink = $this->redirectMessages();
-        notifier::deletion_held($seed->task, 'Curs 2025-2026',
-            get_string('deletion_held_archivemissing', 'local_coursetransfermanager', 'Curs 2025-2026'));
+        notifier::deletion_held(
+            $seed->task,
+            'Curs 2025-2026',
+            get_string('deletion_held_archivemissing', 'local_coursetransfermanager', 'Curs 2025-2026')
+        );
         $messages = $sink->get_messages();
         $sink->close();
 
@@ -148,8 +150,10 @@ final class notifier_test extends \advanced_testcase {
         $messages = $sink->get_messages();
         $sink->close();
 
-        $this->assertSame(task_manager::STATUS_COMPLETED,
-            $DB->get_field('local_ctm_executions', 'status', ['id' => $executionid]));
+        $this->assertSame(
+            task_manager::STATUS_COMPLETED,
+            $DB->get_field('local_ctm_executions', 'status', ['id' => $executionid])
+        );
         $this->assertCount(2, $messages);
         $this->assertSame('restore_completed', $messages[0]->eventtype);
 
@@ -160,7 +164,9 @@ final class notifier_test extends \advanced_testcase {
             'other' => ['type' => 1, 'direction' => 0],
         ]);
         observer::request_completed($other);
-        $this->assertSame(task_manager::STATUS_COMPLETED,
-            $DB->get_field('local_ctm_executions', 'status', ['id' => $executionid]));
+        $this->assertSame(
+            task_manager::STATUS_COMPLETED,
+            $DB->get_field('local_ctm_executions', 'status', ['id' => $executionid])
+        );
     }
 }

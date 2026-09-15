@@ -45,7 +45,6 @@ use stdClass;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class prune_manager {
-
     /** @var string Candidate announced, waiting out its grace period. */
     public const STATUS_ANNOUNCED = 'announced';
 
@@ -194,8 +193,13 @@ final class prune_manager {
     public static function postpone_due(int $now, int $seconds): int {
         global $DB;
 
-        $due = $DB->get_records_select('local_ctm_prune',
-            'status = ? AND graceuntil <= ?', [self::STATUS_ANNOUNCED, $now], '', 'id');
+        $due = $DB->get_records_select(
+            'local_ctm_prune',
+            'status = ? AND graceuntil <= ?',
+            [self::STATUS_ANNOUNCED, $now],
+            '',
+            'id'
+        );
         foreach ($due as $candidate) {
             $DB->update_record('local_ctm_prune', (object) [
                 'id' => $candidate->id,

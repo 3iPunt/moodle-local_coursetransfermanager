@@ -45,7 +45,6 @@ use local_coursetransfermanager\manager\task_manager;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class task_external extends external_api {
-
     /**
      * Common security gate for every panel action.
      *
@@ -123,8 +122,12 @@ class task_external extends external_api {
     public static function run_now_parameters(): external_function_parameters {
         return new external_function_parameters([
             'taskid' => new external_value(PARAM_INT, 'Task id'),
-            'precheck' => new external_value(PARAM_BOOL, 'Only check whether the launch would be blocked',
-                VALUE_DEFAULT, false),
+            'precheck' => new external_value(
+                PARAM_BOOL,
+                'Only check whether the launch would be blocked',
+                VALUE_DEFAULT,
+                false
+            ),
         ]);
     }
 
@@ -339,11 +342,14 @@ class task_external extends external_api {
 
         return [
             'adopted' => $params['adopt'],
-            'audit' => get_string($params['adopt'] ? 'adopted_by' : 'unadopted_by',
-                'local_coursetransfermanager', (object) [
+            'audit' => get_string(
+                $params['adopt'] ? 'adopted_by' : 'unadopted_by',
+                'local_coursetransfermanager',
+                (object) [
                     'name' => fullname($USER),
                     'date' => userdate(time()),
-                ]),
+                ]
+            ),
         ];
     }
 

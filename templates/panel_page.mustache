@@ -24,7 +24,7 @@
   Context variables: see panel_page::export_for_template.
 
   Example context (json):
-  { "headertitle": "Transferencias programadas", "checks": [], "agenda": {"items": []}, "tasks": [], "hastasks": false }
+  { "clearurl": "https://example.com/local/coursetransfermanager/manage.php", "headertitle": "Transferencias programadas", "checks": [], "agenda": {"items": []}, "tasks": [], "hastasks": false }
 }}
 <div class="local-coursetransfermanager" id="ctm-panel">
 
@@ -60,7 +60,7 @@
         </button>
     </div>
 
-    <form class="ct-card ct-filters" method="get" action="" data-region="filters" {{^filters.active}}hidden{{/filters.active}}>
+    <form class="ct-card ct-filters" method="get" action="{{ clearurl }}" data-region="filters" {{^filters.active}}hidden{{/filters.active}}>
         <div class="ct-field">
             <label class="ct-field-label" for="ctm-fstatus">{{#str}} status, local_coursetransfermanager {{/str}}</label>
             <select class="ct-input" id="ctm-fstatus" name="status">

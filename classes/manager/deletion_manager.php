@@ -41,7 +41,6 @@ use stdClass;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class deletion_manager {
-
     /** @var string Deletion is scheduled, advance notice not sent yet. */
     public const STATUS_SCHEDULED = 'scheduled';
 
@@ -232,18 +231,27 @@ final class deletion_manager {
     private static function verification_failure(stdClass $execution): ?string {
         // R1 — completeness lock: "launched" is not "finished".
         if ($execution->status !== task_manager::STATUS_COMPLETED) {
-            return get_string('deletion_held_notcompleted', 'local_coursetransfermanager',
-                format_string((string) $execution->origincategoryname));
+            return get_string(
+                'deletion_held_notcompleted',
+                'local_coursetransfermanager',
+                format_string((string) $execution->origincategoryname)
+            );
         }
         // R2 — the archived copy must still exist here, with courses in it.
         if (empty($execution->destinationcategoryid)) {
-            return get_string('deletion_held_archivemissing', 'local_coursetransfermanager',
-                format_string((string) $execution->origincategoryname));
+            return get_string(
+                'deletion_held_archivemissing',
+                'local_coursetransfermanager',
+                format_string((string) $execution->origincategoryname)
+            );
         }
         $category = core_course_category::get((int) $execution->destinationcategoryid, IGNORE_MISSING, true);
         if (!$category || $category->get_courses_count(['recursive' => true]) === 0) {
-            return get_string('deletion_held_archivemissing', 'local_coursetransfermanager',
-                format_string((string) $execution->origincategoryname));
+            return get_string(
+                'deletion_held_archivemissing',
+                'local_coursetransfermanager',
+                format_string((string) $execution->origincategoryname)
+            );
         }
         return null;
     }
@@ -274,9 +282,13 @@ final class deletion_manager {
     public static function postpone_due(int $now): int {
         global $DB;
 
-        $due = $DB->get_records_select('local_ctm_executions',
+        $due = $DB->get_records_select(
+            'local_ctm_executions',
             "deletestatus IN (?, ?) AND scheduleddeleteat IS NOT NULL AND scheduleddeleteat <= ?",
-            [self::STATUS_SCHEDULED, self::STATUS_WARNED, $now], '', 'id');
+            [self::STATUS_SCHEDULED, self::STATUS_WARNED, $now],
+            '',
+            'id'
+        );
         foreach ($due as $execution) {
             self::postpone((int) $execution->id, $now);
         }

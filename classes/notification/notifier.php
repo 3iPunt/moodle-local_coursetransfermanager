@@ -42,7 +42,6 @@ use stdClass;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class notifier {
-
     /** @var string Notify the full lifecycle (N1-N7). */
     public const LEVEL_FULL = 'full';
 
@@ -79,7 +78,9 @@ final class notifier {
      */
     public static function execution_launched(stdClass $task, string $categoryname, string $host): void {
         $url = self::executions_url((int) $task->id);
-        self::send($task, 'execution_launched',
+        self::send(
+            $task,
+            'execution_launched',
             get_string('notif_launched_subject', 'local_coursetransfermanager', self::a([
                 'taskname' => $task->name,
             ])),
@@ -103,7 +104,9 @@ final class notifier {
      */
     public static function restore_completed(stdClass $task, stdClass $execution): void {
         $url = self::executions_url((int) $task->id);
-        self::send($task, 'restore_completed',
+        self::send(
+            $task,
+            'restore_completed',
             get_string('notif_completed_subject', 'local_coursetransfermanager', self::a([
                 'taskname' => $task->name,
             ])),
@@ -128,7 +131,9 @@ final class notifier {
      */
     public static function deletion_warning(stdClass $task, stdClass $execution): void {
         $url = self::executions_url((int) $task->id);
-        self::send($task, 'deletion_warning',
+        self::send(
+            $task,
+            'deletion_warning',
             get_string('notif_delwarn_subject', 'local_coursetransfermanager', self::a([
                 'categoryname' => (string) $execution->origincategoryname,
                 'deletedate' => userdate((int) $execution->scheduleddeleteat),
@@ -142,8 +147,11 @@ final class notifier {
             get_string('notif_delwarn_small', 'local_coursetransfermanager'),
             $url,
             [
-                get_string('agenda_category', 'local_coursetransfermanager',
-                    (string) $execution->origincategoryname) => (string) $execution->origincategoryidnumber,
+                get_string(
+                    'agenda_category',
+                    'local_coursetransfermanager',
+                    (string) $execution->origincategoryname
+                ) => (string) $execution->origincategoryidnumber,
                 get_string('card_origin', 'local_coursetransfermanager') => self::origin_host($task),
                 get_string('exec_del_date', 'local_coursetransfermanager') =>
                     userdate((int) $execution->scheduleddeleteat),
@@ -160,7 +168,9 @@ final class notifier {
      */
     public static function deletion_done(stdClass $task, string $categoryname): void {
         $url = self::executions_url((int) $task->id);
-        self::send($task, 'deletion_done',
+        self::send(
+            $task,
+            'deletion_done',
             get_string('notif_deldone_subject', 'local_coursetransfermanager', self::a([
                 'categoryname' => $categoryname,
             ])),
@@ -184,7 +194,9 @@ final class notifier {
      */
     public static function prune_warning(stdClass $task, stdClass $candidate): void {
         $url = self::executions_url((int) $task->id);
-        self::send($task, 'prune_warning',
+        self::send(
+            $task,
+            'prune_warning',
             get_string('notif_prunewarn_subject', 'local_coursetransfermanager', self::a([
                 'categoryname' => (string) $candidate->categoryname,
             ])),
@@ -207,7 +219,9 @@ final class notifier {
      */
     public static function prune_done(stdClass $task, string $categoryname): void {
         $url = self::executions_url((int) $task->id);
-        self::send($task, 'prune_done',
+        self::send(
+            $task,
+            'prune_done',
             get_string('notif_prunedone_subject', 'local_coursetransfermanager', self::a([
                 'categoryname' => $categoryname,
             ])),
@@ -230,7 +244,9 @@ final class notifier {
      */
     public static function execution_error(stdClass $task, string $detail): void {
         $url = self::executions_url((int) $task->id);
-        self::send($task, 'execution_error',
+        self::send(
+            $task,
+            'execution_error',
             get_string('notif_error_subject', 'local_coursetransfermanager', self::a([
                 'taskname' => $task->name,
             ])),
@@ -257,7 +273,9 @@ final class notifier {
      */
     public static function deletion_held(stdClass $task, string $categoryname, string $reason): void {
         $url = self::executions_url((int) $task->id);
-        self::send($task, 'deletion_held',
+        self::send(
+            $task,
+            'deletion_held',
             get_string('notif_held_subject', 'local_coursetransfermanager', self::a([
                 'categoryname' => $categoryname,
             ])),
@@ -285,10 +303,18 @@ final class notifier {
      * @param string $body Plain-text body (contains the URL).
      * @param string $small Small message.
      * @param moodle_url $contexturl Context URL.
+     * @param array $rows Extra label/value rows rendered in the message body.
      * @return void
      */
-    private static function send(stdClass $task, string $provider, string $subject, string $body,
-            string $small, moodle_url $contexturl, array $rows = []): void {
+    private static function send(
+        stdClass $task,
+        string $provider,
+        string $subject,
+        string $body,
+        string $small,
+        moodle_url $contexturl,
+        array $rows = []
+    ): void {
 
         $level = $task->notifylevel ?? self::LEVEL_FULL;
         if ($level === self::LEVEL_ESSENTIAL && !in_array($provider, self::ESSENTIAL_PROVIDERS, true)) {
@@ -332,8 +358,13 @@ final class notifier {
      * @param array $rows Key facts as [label => value].
      * @return string HTML, or the escaped plain body if rendering is unavailable.
      */
-    private static function render_html(string $provider, string $subject, string $body,
-            string $url, array $rows): string {
+    private static function render_html(
+        string $provider,
+        string $subject,
+        string $body,
+        string $url,
+        array $rows
+    ): string {
         global $OUTPUT;
 
         // Accent per provider: informative, good news, warning, destructive.

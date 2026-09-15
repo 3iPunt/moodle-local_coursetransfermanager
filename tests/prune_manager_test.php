@@ -28,7 +28,6 @@ use local_coursetransfermanager\manager\prune_manager;
  * @covers     \local_coursetransfermanager\manager\prune_manager
  */
 final class prune_manager_test extends \advanced_testcase {
-
     /**
      * Seed a task, its archive parent and one category per lifecycle band.
      *
@@ -111,18 +110,26 @@ final class prune_manager_test extends \advanced_testcase {
         $this->assertCount(1, $announced);
         $this->assertSame((int)$seed->managedold->id, (int)$announced[0]->categoryid);
         // And it is the year the policy says, not just "some old category".
-        $this->assertSame('SJD' . $seed->years->prunable,
-            $DB->get_field('course_categories', 'idnumber', ['id' => $announced[0]->categoryid]));
+        $this->assertSame(
+            'SJD' . $seed->years->prunable,
+            $DB->get_field('course_categories', 'idnumber', ['id' => $announced[0]->categoryid])
+        );
         // The one still inside the archive window is NOT a candidate: being out
         // of production is not the same as being out of the archive.
         $this->assertSame(1, $DB->count_records('local_ctm_prune'));
-        $this->assertFalse($DB->record_exists('local_ctm_prune',
-            ['categoryid' => $seed->managedmid->id]));
+        $this->assertFalse($DB->record_exists(
+            'local_ctm_prune',
+            ['categoryid' => $seed->managedmid->id]
+        ));
         // Neither the current course nor the foreign MED1042 are candidates.
-        $this->assertFalse($DB->record_exists('local_ctm_prune',
-            ['categoryid' => $seed->managednew->id]));
-        $this->assertFalse($DB->record_exists('local_ctm_prune',
-            ['categoryid' => $seed->foreign->id]));
+        $this->assertFalse($DB->record_exists(
+            'local_ctm_prune',
+            ['categoryid' => $seed->managednew->id]
+        ));
+        $this->assertFalse($DB->record_exists(
+            'local_ctm_prune',
+            ['categoryid' => $seed->foreign->id]
+        ));
 
         // A second detection pass does not re-announce the live candidate.
         $this->assertCount(0, prune_manager::detect(time(), 7));

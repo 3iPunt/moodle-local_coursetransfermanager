@@ -37,7 +37,6 @@ use stdClass;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class agenda {
-
     /** @var string A task will fire. */
     public const TYPE_EXECUTION = 'execution';
 
@@ -61,7 +60,7 @@ final class agenda {
             self::pending_prunings($taskid)
         );
 
-        usort($items, static function(stdClass $a, stdClass $b): int {
+        usort($items, static function (stdClass $a, stdClass $b): int {
             return $a->date <=> $b->date;
         });
 

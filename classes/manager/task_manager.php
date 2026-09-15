@@ -25,7 +25,6 @@
 
 namespace local_coursetransfermanager\manager;
 
-defined('MOODLE_INTERNAL') || die();
 
 use coding_exception;
 use core_course_category;
@@ -54,7 +53,6 @@ use Throwable;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class task_manager {
-
     /** @var string Execution failed. */
     public const STATUS_ERROR = 'error';
 
@@ -168,8 +166,10 @@ class task_manager {
             $task->targetidnumber = null;
             if ($mask) {
                 $reference = !empty($task->nextruntime) ? (int)$task->nextruntime : time();
-                $task->targetidnumber = academic_year::example_for($mask,
-                    rotation::archive_threshold($task, $reference));
+                $task->targetidnumber = academic_year::example_for(
+                    $mask,
+                    rotation::archive_threshold($task, $reference)
+                );
             }
 
             $task->targetcategoryname = null;
@@ -524,8 +524,14 @@ class task_manager {
             . count($pending) . ' pending, processing ' . count($batch) . ' this run.');
 
         foreach ($batch as $category) {
-            $this->archive_category($task, $site, (int)$category->id, (string)$category->name,
-                (string)$category->idnumber, $manualrun);
+            $this->archive_category(
+                $task,
+                $site,
+                (int)$category->id,
+                (string)$category->name,
+                (string)$category->idnumber,
+                $manualrun
+            );
         }
 
         if (count($pending) > count($batch)) {
@@ -546,8 +552,14 @@ class task_manager {
      * @return void
      * @throws dml_exception
      */
-    private function archive_category(object $task, stdClass $site, int $origincategoryid,
-            string $origincategoryname, string $origincategoryidnumber, bool $manualrun): void {
+    private function archive_category(
+        object $task,
+        stdClass $site,
+        int $origincategoryid,
+        string $origincategoryname,
+        string $origincategoryidnumber,
+        bool $manualrun
+    ): void {
         global $USER;
 
         mtrace('Archiving origin category ID ' . $origincategoryid
@@ -852,7 +864,7 @@ class task_manager {
             return;
         }
         $taskcache = [];
-        $gettask = static function(int $taskid) use (&$taskcache, $DB): ?object {
+        $gettask = static function (int $taskid) use (&$taskcache, $DB): ?object {
             if (!array_key_exists($taskid, $taskcache)) {
                 $taskcache[$taskid] = $DB->get_record('local_ctm_tasks', ['id' => $taskid]) ?: null;
             }

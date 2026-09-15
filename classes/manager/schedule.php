@@ -43,7 +43,6 @@ use Throwable;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class schedule {
-
     /** @var int Search horizon in days (4 years + leap margin). */
     private const MAX_DAYS = 1466;
 

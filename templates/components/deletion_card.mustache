@@ -26,9 +26,10 @@
   * executionid/pruneid - int
   * categoryname, taskname, date, relative - strings
   * urgent - boolean (origin deletion within 3 days)
+  * awaiting - boolean (verified origin deletion waiting for approval), approveurl - string
 
   Example context (json):
-  { "isdeletion": true, "executionid": 3, "categoryname": "Curs 2024-2025", "taskname": "Archivo anual", "date": "31-jul-2026", "relative": "en 3 días", "urgent": true }
+  { "isdeletion": true, "executionid": 3, "categoryname": "Curs 2024-2025", "taskname": "Archivo anual", "date": "31-jul-2026", "relative": "en 3 días", "urgent": true, "awaiting": true, "approveurl": "https://example.com/local/coursetransfermanager/approve.php?id=3" }
 }}
 <div class="ct-card ct-delcard {{#isdeletion}}ct-delcard--origin{{/isdeletion}}"
      {{#executionid}}data-executionid="{{ executionid }}"{{/executionid}}
@@ -49,7 +50,15 @@
             <span><span class="ct-eyebrow">{{#str}} exec_del_date, local_coursetransfermanager {{/str}}</span>{{ date }}</span>
             <span><span class="ct-eyebrow">{{#str}} exec_del_origin, local_coursetransfermanager {{/str}}</span>{{{ taskname }}}</span>
         </div>
+        {{#awaiting}}
+        <p class="ct-text-danger">{{#str}} approval_awaiting, local_coursetransfermanager {{/str}}</p>
+        {{/awaiting}}
         <div class="ct-delcard-actions" data-region="delcard-actions">
+            {{#awaiting}}
+            <a class="ct-btn ct-btn--primary ct-btn--sm" href="{{ approveurl }}">
+                {{#str}} approval_approve, local_coursetransfermanager {{/str}}
+            </a>
+            {{/awaiting}}
             {{#isdeletion}}
             <button type="button" class="ct-btn ct-btn--secondary ct-btn--sm" data-action="cancel-deletion"
                     data-executionid="{{ executionid }}" data-category="{{ categoryname }}">

@@ -42,6 +42,11 @@ final class prune_manager_test extends \advanced_testcase {
     private function seed(int $originkeep = 2, int $keepyears = 4): \stdClass {
         global $DB;
 
+        // Detection lists the archive through core_course_category::get_children(), which
+        // only returns what the current user can see. Cron runs it as the admin; without a
+        // user, forcelogin (on by default since Moodle 5.3, MDL-87553) hides every category.
+        $this->setAdminUser();
+
         $generator = $this->getDataGenerator();
         $parent = $generator->create_category(['name' => 'Archivo']);
 
@@ -231,5 +236,117 @@ final class prune_manager_test extends \advanced_testcase {
         // Excluding again is rejected.
         $this->expectException(\moodle_exception::class);
         prune_manager::exclude((int)$candidate->id, 2);
+    }
+
+    /**
+     * Run a callable capturing its output.
+     *
+     * @param callable $callback Callback.
+     * @return mixed Its result.
+     */
+    private function quietly(callable $callback) {
+        ob_start();
+        try {
+            return $callback();
+        } finally {
+            ob_end_clean();
+        }
+    }
+
+    /**
+     * H4 — an adopted category is managed: the policy prunes it like one the task brought.
+     */
+    public function test_detect_includes_adopted_categories(): void {
+        $this->resetAfterTest();
+        $seed = $this->seed();
+        $adopted = $this->getDataGenerator()->create_category([
+            'name' => 'Adoptada', 'parent' => $seed->parent->id, 'idnumber' => 'SJD' . ($seed->years->prunable - 1),
+        ]);
+        $this->getDataGenerator()->get_plugin_generator('local_coursetransfermanager')->create_adopted([
+            'taskid' => $seed->task->id, 'categoryid' => $adopted->id,
+        ]);
+
+        $announced = $this->quietly(fn() => prune_manager::detect(time(), 7));
+
+        $this->assertContains((int)$adopted->id, array_map('intval', array_column($announced, 'categoryid')));
+    }
+
+    /**
+     * H4 — a task never announces a category another task manages, even under the same parent.
+     */
+    public function test_detect_does_not_mix_tasks(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $seed = $this->seed(2, 4);
+        // A second task over the same archive, with a shorter policy and nothing of its own.
+        $other = clone $seed->task;
+        unset($other->id);
+        $other->name = 'Otra';
+        $other->destinationkeepyears = 1;
+        $otherid = $DB->insert_record('local_coursetransfermanager_tasks', $other);
+
+        $announced = $this->quietly(fn() => prune_manager::detect(time(), 7));
+
+        $this->assertNotContains($otherid, array_map('intval', array_column($announced, 'taskid')));
+        $this->assertFalse($DB->record_exists('local_coursetransfermanager_prune', ['taskid' => $otherid]));
+    }
+
+    /**
+     * H14 — a candidate that stopped being valid during its grace is not deleted.
+     */
+    public function test_execute_due_revalidates_the_candidate(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $seed = $this->seed();
+        $this->quietly(fn() => prune_manager::detect(time(), 7));
+        // During the grace somebody widened the archive window: the year is no longer prunable.
+        $DB->set_field('local_coursetransfermanager_tasks', 'destinationkeepyears', 6, ['id' => $seed->task->id]);
+
+        $results = $this->quietly(fn() => prune_manager::execute_due(time() + 8 * DAYSECS));
+
+        $this->assertTrue($DB->record_exists('course_categories', ['id' => $seed->managedold->id]));
+        $this->assertSame(prune_manager::STATUS_EXCLUDED, $DB->get_field(
+            'local_coursetransfermanager_prune',
+            'status',
+            ['categoryid' => $seed->managedold->id]
+        ));
+        $this->assertSame('invalid', $results[0]->outcome);
+    }
+
+    /**
+     * H14 — a candidate moved out of the archive destination is not deleted.
+     */
+    public function test_execute_due_requires_the_destination_parent(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $seed = $this->seed();
+        $this->quietly(fn() => prune_manager::detect(time(), 7));
+        $elsewhere = $this->getDataGenerator()->create_category(['name' => 'Fuera']);
+        \core_course_category::get($seed->managedold->id)->change_parent($elsewhere->id);
+
+        $this->quietly(fn() => prune_manager::execute_due(time() + 8 * DAYSECS));
+
+        $this->assertTrue($DB->record_exists('course_categories', ['id' => $seed->managedold->id]));
+    }
+
+    /**
+     * H13 — a grace of zero days never announces and deletes in the same pass.
+     */
+    public function test_zero_grace_never_deletes_in_the_same_pass(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $seed = $this->seed();
+        set_config('prunegracedays', 0, 'local_coursetransfermanager');
+        $this->redirectMessages();
+
+        $this->quietly(fn() => (new \local_coursetransfermanager\manager\task_manager())->cleanup_tasks());
+
+        $this->assertTrue($DB->record_exists('course_categories', ['id' => $seed->managedold->id]));
+        $graceuntil = (int)$DB->get_field(
+            'local_coursetransfermanager_prune',
+            'graceuntil',
+            ['categoryid' => $seed->managedold->id]
+        );
+        $this->assertGreaterThanOrEqual(time() + DAYSECS - 5, $graceuntil);
     }
 }

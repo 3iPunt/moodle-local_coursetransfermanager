@@ -73,10 +73,11 @@ final class origin {
      *
      * @param int $originsiteid Origin site id.
      * @param int $limit Maximum categories to read.
+     * @param stdClass|null $user Identity presented to the origin; the current user when null.
      * @return stdClass[] {id, name, idnumber, parentid, totalcourses}
      */
-    public static function categories(int $originsiteid, int $limit = 500): array {
-        return self::categories_result($originsiteid, $limit)->categories;
+    public static function categories(int $originsiteid, int $limit = 500, ?stdClass $user = null): array {
+        return self::categories_result($originsiteid, $limit, $user)->categories;
     }
 
     /**
@@ -87,9 +88,10 @@ final class origin {
      *
      * @param int $originsiteid Origin site id (local_coursetransfer_origin).
      * @param int $limit Maximum categories to ask for.
+     * @param stdClass|null $user Identity presented to the origin; the current user when null.
      * @return stdClass {categories: stdClass[], error: string} — error is empty on success.
      */
-    public static function categories_result(int $originsiteid, int $limit = 500): stdClass {
+    public static function categories_result(int $originsiteid, int $limit = 500, ?stdClass $user = null): stdClass {
         global $USER;
 
         $result = (object) ['categories' => [], 'error' => ''];
@@ -106,7 +108,7 @@ final class origin {
         // cURL security bypass site-to-site setups need. Rolling our own call here
         // would break that contract.
         try {
-            $response = (new request($site))->origin_get_categories($USER, 0, $limit);
+            $response = (new request($site))->origin_get_categories($user ?? $USER, 0, $limit);
         } catch (\Throwable $e) {
             $result->error = $e->getMessage();
             return $result;

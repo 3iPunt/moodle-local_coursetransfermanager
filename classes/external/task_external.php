@@ -30,11 +30,13 @@ namespace local_coursetransfermanager\external;
 use context_system;
 use core_external\external_api;
 use core_external\external_function_parameters;
+use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
 use local_coursetransfermanager\manager\deletion_manager;
 use local_coursetransfermanager\manager\prune_manager;
 use local_coursetransfermanager\manager\rotation;
+use local_coursetransfermanager\manager\simulation;
 use local_coursetransfermanager\manager\task_manager;
 
 /**
@@ -166,6 +168,9 @@ class task_external extends external_api {
             'lastsuccess' => $result->lastsuccess ? userdate($result->lastsuccess) : '',
             'nextrun' => '',
             'error' => (string)($result->error ?? ''),
+            'busy' => $result->busy,
+            'succeeded' => $result->succeeded,
+            'failed' => $result->failed,
         ];
     }
 
@@ -176,11 +181,14 @@ class task_external extends external_api {
      */
     public static function run_now_returns(): external_single_structure {
         return new external_single_structure([
-            'launched' => new external_value(PARAM_BOOL, 'True when the restoration was launched'),
+            'launched' => new external_value(PARAM_BOOL, 'True when at least one restoration was launched'),
             'blocked' => new external_value(PARAM_BOOL, 'True when blocked by a recent success (duplicates guard)'),
             'lastsuccess' => new external_value(PARAM_TEXT, 'Human date of the blocking success, if any'),
             'nextrun' => new external_value(PARAM_TEXT, 'Human date of the scheduled run (precheck only)'),
             'error' => new external_value(PARAM_RAW, 'Failure detail when the launch failed'),
+            'busy' => new external_value(PARAM_BOOL, 'True when another process was running the task', VALUE_OPTIONAL),
+            'succeeded' => new external_value(PARAM_INT, 'Categories whose restoration was launched', VALUE_OPTIONAL),
+            'failed' => new external_value(PARAM_INT, 'Categories whose restoration failed', VALUE_OPTIONAL),
         ]);
     }
 
@@ -362,6 +370,120 @@ class task_external extends external_api {
         return new external_single_structure([
             'adopted' => new external_value(PARAM_BOOL, 'True when the task now manages it'),
             'audit' => new external_value(PARAM_TEXT, 'Who decided and when, human readable'),
+        ]);
+    }
+
+    /**
+     * Parameters of deletion_approve().
+     *
+     * @return external_function_parameters
+     */
+    public static function deletion_approve_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'executionid' => new external_value(PARAM_INT, 'Execution id awaiting approval'),
+        ]);
+    }
+
+    /**
+     * Approve a verified origin deletion held for the first-deletion approval.
+     *
+     * @param int $executionid Execution id.
+     * @return array
+     */
+    public static function deletion_approve(int $executionid): array {
+        global $USER;
+
+        $params = self::validate_parameters(self::deletion_approve_parameters(), ['executionid' => $executionid]);
+        self::require_manager();
+
+        deletion_manager::approve($params['executionid'], (int)$USER->id);
+
+        return [
+            'approved' => true,
+            'audit' => get_string('approved_by', 'local_coursetransfermanager', (object)[
+                'name' => fullname($USER),
+                'date' => userdate(time()),
+            ]),
+        ];
+    }
+
+    /**
+     * Return structure of deletion_approve().
+     *
+     * @return external_single_structure
+     */
+    public static function deletion_approve_returns(): external_single_structure {
+        return new external_single_structure([
+            'approved' => new external_value(PARAM_BOOL, 'True when the deletion was approved'),
+            'audit' => new external_value(PARAM_TEXT, 'Who approved and when, human readable'),
+        ]);
+    }
+
+    /**
+     * Parameters of task_simulate().
+     *
+     * @return external_function_parameters
+     */
+    public static function task_simulate_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'taskid' => new external_value(PARAM_INT, 'Task id'),
+        ]);
+    }
+
+    /**
+     * Dry run of a task: nothing is written in the origin, the archive or the database.
+     *
+     * @param int $taskid Task id.
+     * @return array
+     */
+    public static function task_simulate(int $taskid): array {
+        $params = self::validate_parameters(self::task_simulate_parameters(), ['taskid' => $taskid]);
+        self::require_manager();
+
+        $result = simulation::run((new task_manager())->get_task($params['taskid']));
+        return [
+            'archiveerror' => $result->archiveerror,
+            'identity' => $result->identity,
+            'archive' => array_map(static fn($row): array => (array)$row, $result->archive),
+            'deletions' => array_map(static fn($row): array => [
+                'name' => $row->name, 'date' => $row->date, 'status' => $row->status, 'rule' => $row->rule,
+                'reason' => $row->reason, 'passed' => $row->passed, 'notes' => implode(' ', $row->notes),
+            ], $result->deletions),
+            'prunings' => array_map(static fn($row): array => (array)$row, $result->prunings),
+        ];
+    }
+
+    /**
+     * Return structure of task_simulate().
+     *
+     * @return external_single_structure
+     */
+    public static function task_simulate_returns(): external_single_structure {
+        return new external_single_structure([
+            'archiveerror' => new external_value(PARAM_RAW, 'Why the origin could not be read, empty when it could'),
+            'identity' => new external_value(PARAM_TEXT, 'Task creator the origin is asked as, empty when unusable'),
+            'archive' => new external_multiple_structure(new external_single_structure([
+                'name' => new external_value(PARAM_TEXT, 'Origin category name'),
+                'idnumber' => new external_value(PARAM_RAW, 'Origin category idnumber'),
+                'year' => new external_value(PARAM_INT, 'Academic year'),
+                'thisrun' => new external_value(PARAM_BOOL, 'Within the per-run cap of the next run'),
+            ])),
+            'deletions' => new external_multiple_structure(new external_single_structure([
+                'name' => new external_value(PARAM_TEXT, 'Origin category name'),
+                'date' => new external_value(PARAM_INT, 'Scheduled deletion date'),
+                'status' => new external_value(PARAM_ALPHA, 'delete | scheduled | held | approval'),
+                'rule' => new external_value(PARAM_RAW, 'Rule that holds it (R1, R2, R2v, R3, creator), empty if none'),
+                'reason' => new external_value(PARAM_RAW, 'Why it is held'),
+                'passed' => new external_value(PARAM_RAW, 'Rules it passes, e.g. R1+R2+R2v+R3'),
+                'notes' => new external_value(PARAM_RAW, 'What could not be verified'),
+            ])),
+            'prunings' => new external_multiple_structure(new external_single_structure([
+                'name' => new external_value(PARAM_TEXT, 'Archive category name'),
+                'idnumber' => new external_value(PARAM_RAW, 'Archive category idnumber'),
+                'year' => new external_value(PARAM_INT, 'Academic year'),
+                'status' => new external_value(PARAM_ALPHA, 'announce | announced | prune | excluded'),
+                'date' => new external_value(PARAM_INT, 'Grace end (0 when excluded)'),
+            ])),
         ]);
     }
 }

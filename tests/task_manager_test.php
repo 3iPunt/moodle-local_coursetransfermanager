@@ -29,6 +29,20 @@ use local_coursetransfermanager\manager\task_manager;
  */
 final class task_manager_test extends \advanced_testcase {
     /**
+     * Every restore keeps a safety copy in the destination and never removes the origin by itself:
+     * the origin goes only through the verified, announced deletion.
+     */
+    public function test_restore_keeps_a_safety_copy(): void {
+        $configuration = task_manager::restore_configuration((object)['restoreuserdata' => 1]);
+
+        $this->assertTrue(property_exists($configuration, 'keepsafetycopy'), 'local_coursetransfer lacks keepsafetycopy');
+        $this->assertTrue($configuration->keepsafetycopy);
+        $this->assertFalse($configuration->originremovecategory);
+        $this->assertTrue($configuration->originenrolusers);
+        $this->assertSame(1, $configuration->targettarget);
+    }
+
+    /**
      * R3 — while the emergency switch is on, nothing destructive runs and
      * every due date slides forward, so lifting the pause never triggers an
      * immediate backlog of deletions or prunings.
@@ -80,5 +94,25 @@ final class task_manager_test extends \advanced_testcase {
         $this->assertGreaterThan($now, (int)$candidate->graceuntil);
 
         $this->assertTrue($DB->record_exists('course_categories', ['id' => $old->id]));
+    }
+
+    /**
+     * Executions created in the same second (one run, several categories) still give one row per task.
+     */
+    public function test_tasks_overview_is_one_row_per_task(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        /** @var \local_coursetransfermanager_generator $generator */
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_coursetransfermanager');
+        $task = $generator->create_task();
+        $now = time();
+        $generator->create_execution(['taskid' => $task->id, 'status' => 'success', 'timecreated' => $now]);
+        $last = $generator->create_execution(['taskid' => $task->id, 'status' => 'error', 'timecreated' => $now]);
+
+        $overview = (new task_manager())->get_tasks_overview();
+
+        $this->assertDebuggingNotCalled();
+        $this->assertCount(1, $overview);
+        $this->assertSame($last->status, reset($overview)->laststatus);
     }
 }

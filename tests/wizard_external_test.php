@@ -408,4 +408,85 @@ final class wizard_external_test extends \advanced_testcase {
         $this->assertSame('invalid', $result['status']);
         $this->assertSame('', $result['example']);
     }
+
+    /**
+     * H1 — the years kept in the origin chosen in the wizard are stored on create.
+     */
+    public function test_task_save_keeps_origin_years_on_create(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $category = $this->getDataGenerator()->create_category();
+
+        $result = wizard_external::task_save(
+            0,
+            'Tres años',
+            $this->seed_origin(),
+            'SJD{YEAR}',
+            3,
+            $category->id,
+            '0 2 1 9 *',
+            30,
+            4,
+            false,
+            'full',
+            []
+        );
+
+        $this->assertSame(3, (int)$DB->get_field('local_coursetransfermanager_tasks', 'originkeepyears', ['id' => $result['id']]));
+    }
+
+    /**
+     * H10 — a cron that parses but never fires (31 February) is refused.
+     */
+    public function test_task_save_rejects_a_schedule_that_never_fires(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $category = $this->getDataGenerator()->create_category();
+
+        $this->expectException(\invalid_parameter_exception::class);
+        wizard_external::task_save(
+            0,
+            'Nunca',
+            $this->seed_origin(),
+            'SJD{YEAR}',
+            2,
+            $category->id,
+            '0 2 31 2 *',
+            30,
+            4,
+            false,
+            'full',
+            []
+        );
+    }
+
+    /**
+     * S2 — the recipient search only shows (and searches) emails to whoever may see them.
+     */
+    public function test_user_search_respects_identity_visibility(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->getDataGenerator()->create_user([
+            'firstname' => 'Berta', 'lastname' => 'Buscable', 'email' => 'berta@example.com',
+        ]);
+        $manager = $this->getDataGenerator()->create_user();
+        $roleid = create_role('Rotation manager', 'rotationmanager', '');
+        $context = \context_system::instance();
+        assign_capability('local/coursetransfermanager:managetasks', CAP_ALLOW, $roleid, $context->id);
+        role_assign($roleid, $manager->id, $context->id);
+        $this->setUser($manager);
+
+        $users = wizard_external::user_search('Buscable')['users'];
+        $this->assertCount(1, $users);
+        $this->assertSame('', $users[0]['email']);
+        // Nor can the email be used to probe who exists.
+        $this->assertCount(0, wizard_external::user_search('berta@example')['users']);
+
+        assign_capability('moodle/site:viewuseridentity', CAP_ALLOW, $roleid, $context->id);
+        accesslib_clear_all_caches_for_unit_testing();
+        $users = wizard_external::user_search('berta@example')['users'];
+        $this->assertCount(1, $users);
+        $this->assertSame('berta@example.com', $users[0]['email']);
+    }
 }

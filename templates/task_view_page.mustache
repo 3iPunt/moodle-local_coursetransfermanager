@@ -36,7 +36,7 @@
       "policyline": "Máscara SJD{YEAR}", "retentiondays": 30,
       "projection": {"valid": false}, "timeline": {"items": []},
       "agenda": [], "managed": [], "adoptable": [],
-      "panel": "#", "settings": "#", "editurl": "#", "executionsurl": "#"
+      "panel": "#", "settings": "#", "editurl": "#", "executionsurl": "#", "simulateurl": "#"
     }
 }}
 <div class="local-coursetransfermanager ct-app" id="ctm-taskview" data-taskid="{{ taskid }}">
@@ -44,6 +44,10 @@
     <div class="ct-hero">
         {{> local_coursetransfermanager/components/page_header }}
         <div class="ct-hero-side">
+            <a class="ct-btn ct-btn--secondary" href="{{ simulateurl }}">
+                <i class="fa fa-flask" aria-hidden="true"></i>
+                {{#str}} sim_button, local_coursetransfermanager {{/str}}
+            </a>
             <a class="ct-btn ct-btn--secondary" href="{{ executionsurl }}">
                 <i class="fa fa-list-ul" aria-hidden="true"></i>
                 {{#str}} card_view_executions, local_coursetransfermanager {{/str}}

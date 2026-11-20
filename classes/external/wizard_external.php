@@ -487,17 +487,23 @@ class wizard_external extends external_api {
         $params = self::validate_parameters(self::user_search_parameters(), ['query' => $query]);
         self::require_manager();
 
+        // The email is shown, and searchable, only to whoever may see it (showuseridentity).
+        $showemail = in_array('email', \core_user\fields::get_identity_fields(context_system::instance(), false), true);
+
         $results = [];
         if (core_text::strlen($params['query']) >= 2) {
             $fullname = $DB->sql_fullname('firstname', 'lastname');
-            $where = '(' . $DB->sql_like($fullname, ':q1', false, false)
-                . ' OR ' . $DB->sql_like('email', ':q2', false, false) . ')'
-                . ' AND deleted = 0 AND suspended = 0 AND confirmed = 1 AND id > 1';
             $escaped = '%' . $DB->sql_like_escape($params['query']) . '%';
+            $match = $DB->sql_like($fullname, ':q1', false, false);
+            $sqlparams = ['q1' => $escaped];
+            if ($showemail) {
+                $match .= ' OR ' . $DB->sql_like('email', ':q2', false, false);
+                $sqlparams['q2'] = $escaped;
+            }
             $users = $DB->get_records_select(
                 'user',
-                $where,
-                ['q1' => $escaped, 'q2' => $escaped],
+                "($match) AND deleted = 0 AND suspended = 0 AND confirmed = 1 AND id > 1",
+                $sqlparams,
                 'lastname ASC, firstname ASC',
                 'id, firstname, lastname, email, firstnamephonetic,
                  lastnamephonetic, middlename, alternatename',
@@ -508,7 +514,7 @@ class wizard_external extends external_api {
                 $results[] = [
                     'id' => (int)$user->id,
                     'fullname' => fullname($user),
-                    'email' => $user->email,
+                    'email' => $showemail ? $user->email : '',
                 ];
             }
         }
@@ -526,7 +532,7 @@ class wizard_external extends external_api {
             'users' => new external_multiple_structure(new external_single_structure([
                 'id' => new external_value(PARAM_INT, 'User id'),
                 'fullname' => new external_value(PARAM_TEXT, 'Full name'),
-                'email' => new external_value(PARAM_TEXT, 'Email'),
+                'email' => new external_value(PARAM_TEXT, 'Email, empty when the viewer may not see it'),
             ])),
         ]);
     }
@@ -620,7 +626,8 @@ class wizard_external extends external_api {
         if (!core_course_category::get($params['targetcategoryid'], IGNORE_MISSING)) {
             throw new invalid_parameter_exception('targetcategoryid');
         }
-        if (!schedule::is_valid($params['cronexpression'])) {
+        // Parsing is not enough: an expression that never fires (31 February) would never run.
+        if (!schedule::is_valid($params['cronexpression']) || schedule::next($params['cronexpression'], time()) === null) {
             throw new invalid_parameter_exception('cronexpression');
         }
         // Named one by one: an admin fixing a rejected save needs to know which

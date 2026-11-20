@@ -164,14 +164,45 @@ define([
     };
 
     /**
+     * Escape text before it reaches a notification, which renders HTML.
+     *
+     * @param {String} text Plain text (remote errors included).
+     * @return {String} HTML-safe text.
+     */
+    const escapeHtml = function(text) {
+        const div = document.createElement('div');
+        div.textContent = text === null || text === undefined ? '' : String(text);
+        return div.innerHTML;
+    };
+
+    /**
      * Report a task that could not be launched.
      *
      * @param {String} error Error detail returned by the service.
      * @return {Promise} Resolved once the message is shown.
      */
     const reportFailed = function(error) {
-        return Str.get_string('runnow_failed', 'local_coursetransfermanager', error).then(function(message) {
+        return Str.get_string('runnow_failed', 'local_coursetransfermanager', escapeHtml(error)).then(function(message) {
             Notification.addNotification({message: message, type: 'error'});
+            return null;
+        });
+    };
+
+    /**
+     * Report a launch where some categories failed, and reload.
+     *
+     * @param {Object} result Run-now payload with succeeded and failed.
+     * @return {Promise} Resolved once the message is shown.
+     */
+    const reportPartial = function(result) {
+        return Str.get_string('runnow_partial', 'local_coursetransfermanager', {
+            succeeded: result.succeeded,
+            failed: result.failed,
+        }).then(function(message) {
+            Notification.addNotification({message: message, type: 'warning'});
+            window.setTimeout(function() {
+                window.location.reload();
+            }, 2400);
             return null;
         });
     };
@@ -183,6 +214,9 @@ define([
      */
     const launch = function(taskid) {
         call('task_run_now', {taskid: taskid, precheck: false}).then(function(result) {
+            if (result.launched && result.failed) {
+                return reportPartial(result);
+            }
             if (result.launched) {
                 return reportLaunched();
             }
@@ -264,8 +298,16 @@ define([
                 }
                 const actions = row.querySelector('.ct-agenda-actions');
                 if (actions) {
-                    actions.innerHTML = '<span class="ct-agenda-audit"><i class="fa fa-check" aria-hidden="true"></i> '
-                        + audit + '</span>';
+                    // Built node by node: the audit carries a user's name, never parse it as HTML.
+                    const trail = document.createElement('span');
+                    trail.className = 'ct-agenda-audit';
+                    const icon = document.createElement('i');
+                    icon.className = 'fa fa-check';
+                    icon.setAttribute('aria-hidden', 'true');
+                    trail.appendChild(icon);
+                    trail.appendChild(document.createTextNode(' ' + audit));
+                    actions.textContent = '';
+                    actions.appendChild(trail);
                 }
             }
             return null;

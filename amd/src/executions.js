@@ -103,9 +103,16 @@ define([
             var card = button.closest('.ct-delcard');
             var actions = card.querySelector('[data-region="delcard-actions"]');
             card.classList.add('ct-delcard--cancelled');
-            actions.innerHTML = '<span class="ct-agenda-audit">'
-                + '<i class="fa fa-check" aria-hidden="true"></i> '
-                + response.audit + '</span>';
+            // Built node by node: the audit carries a user's name, never parse it as HTML.
+            var trail = document.createElement('span');
+            trail.className = 'ct-agenda-audit';
+            var icon = document.createElement('i');
+            icon.className = 'fa fa-check';
+            icon.setAttribute('aria-hidden', 'true');
+            trail.appendChild(icon);
+            trail.appendChild(document.createTextNode(' ' + response.audit));
+            actions.textContent = '';
+            actions.appendChild(trail);
             return null;
         }).catch(Notification.exception);
     };

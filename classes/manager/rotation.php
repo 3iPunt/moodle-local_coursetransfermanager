@@ -25,6 +25,7 @@
 namespace local_coursetransfermanager\manager;
 
 use core_course_category;
+use moodle_exception;
 use stdClass;
 
 /**
@@ -76,25 +77,31 @@ final class rotation {
     /**
      * Categories of the origin that have outstayed their time in production.
      *
-     * Oldest first: if the cap kicks in, the most urgent go first. Categories
-     * whose idnumber does not match the mask are never touched, and neither
-     * are those the task already archived successfully in this cycle.
+     * Oldest first; never one the task already brought (see {@see self::already_archived()}).
      *
      * @param stdClass $task Task record.
      * @param int|null $time Reference timestamp.
+     * @param stdClass|null $user Identity presented to the origin; the current user when null.
      * @return stdClass[] {id, name, idnumber, year} of the origin, oldest first.
+     * @throws moodle_exception originunreadable when the origin cannot be listed: an
+     *                          unreadable origin is an error, never "nothing to archive".
      */
-    public static function to_archive(stdClass $task, ?int $time = null): array {
+    public static function to_archive(stdClass $task, ?int $time = null, ?stdClass $user = null): array {
         $mask = self::mask($task);
         if (!$mask) {
             return [];
         }
 
+        $remote = origin::categories_result((int) $task->originsiteid, 500, $user);
+        if ($remote->error !== '') {
+            throw new moodle_exception('originunreadable', 'local_coursetransfermanager', '', $remote->error);
+        }
+
         $threshold = self::archive_threshold($task, $time);
-        $archived = self::already_archived_years($task);
+        $archived = self::already_archived($task);
 
         $candidates = [];
-        foreach (origin::categories((int) $task->originsiteid) as $category) {
+        foreach ($remote->categories as $category) {
             // A remote on an older release may not report the idnumber: skip it
             // instead of failing the whole run (the contract is only additive).
             if (empty($category->idnumber)) {
@@ -104,7 +111,11 @@ final class rotation {
             if ($year === null || $year > $threshold) {
                 continue;
             }
-            if (in_array($year, $archived, true)) {
+            // Per category, not per year: a wildcard mask has several categories per year.
+            if (
+                isset($archived->ids[(int) $category->id])
+                    || isset($archived->idnumbers[(string) $category->idnumber])
+            ) {
                 continue;
             }
             $category->year = $year;
@@ -119,16 +130,15 @@ final class rotation {
     /**
      * Local archive categories that have outstayed their time in the archive.
      *
-     * Only categories this plugin manages are considered — the safety rule
-     * that keeps foreign content untouched.
+     * Only what this task manages (brought or adopted), right under its destination.
      *
      * @param stdClass $task Task record.
      * @param int|null $time Reference timestamp.
-     * @return stdClass[] {id, name, idnumber, year} of the local archive, oldest first.
+     * @return stdClass[] {id, name, idnumber, parent, year} of the local archive, oldest first.
      */
     public static function to_prune(stdClass $task, ?int $time = null): array {
         $mask = self::mask($task);
-        if (!$mask) {
+        if (!$mask || empty($task->targetcategoryid)) {
             return [];
         }
 
@@ -136,6 +146,9 @@ final class rotation {
         $candidates = [];
 
         foreach (self::managed_archive_categories($task) as $category) {
+            if ((int) $category->parent !== (int) $task->targetcategoryid) {
+                continue;
+            }
             $year = $mask->year_of((string) $category->idnumber);
             if ($year === null || $year > $threshold) {
                 continue;
@@ -147,6 +160,23 @@ final class rotation {
         usort($candidates, static fn(stdClass $a, stdClass $b): int => $a->year <=> $b->year);
 
         return $candidates;
+    }
+
+    /**
+     * Whether the task's policy still prunes this archive category right now.
+     *
+     * @param stdClass $task Task record.
+     * @param int $categoryid Archive category id.
+     * @param int|null $time Reference timestamp.
+     * @return bool
+     */
+    public static function is_prunable(stdClass $task, int $categoryid, ?int $time = null): bool {
+        foreach (self::to_prune($task, $time) as $category) {
+            if ((int) $category->id === $categoryid) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -268,43 +298,42 @@ final class rotation {
     }
 
     /**
-     * Academic years this task already archived successfully.
+     * Origin categories this task already brought, by id and by idnumber.
      *
-     * Prevents bringing the same course twice (which would duplicate every
-     * one of its courses in the archive).
+     * A restore that failed half way counts (relaunching would duplicate what arrived);
+     * a failure before anything was launched (no request) does not, so it is retried.
      *
      * @param stdClass $task Task record.
-     * @return int[] Academic years.
+     * @return stdClass {ids: array<int, true>, idnumbers: array<string, true>}
      */
-    private static function already_archived_years(stdClass $task): array {
+    private static function already_archived(stdClass $task): stdClass {
         global $DB;
-
-        $mask = self::mask($task);
-        if (!$mask) {
-            return [];
-        }
 
         [$insql, $params] = $DB->get_in_or_equal(
             [task_manager::STATUS_SUCCESS, task_manager::STATUS_COMPLETED],
             SQL_PARAMS_NAMED
         );
         $params['taskid'] = $task->id;
+        $params['error'] = task_manager::STATUS_ERROR;
 
-        $idnumbers = $DB->get_fieldset_select(
+        $rows = $DB->get_records_select(
             'local_coursetransfermanager_executions',
-            'DISTINCT origincategoryidnumber',
-            "taskid = :taskid AND status $insql AND origincategoryidnumber IS NOT NULL",
-            $params
+            "taskid = :taskid AND (status $insql OR (status = :error AND requestid IS NOT NULL))",
+            $params,
+            '',
+            'id, origincategoryid, origincategoryidnumber'
         );
 
-        $years = [];
-        foreach ($idnumbers as $idnumber) {
-            $year = $mask->year_of((string) $idnumber);
-            if ($year !== null) {
-                $years[] = $year;
+        $archived = (object) ['ids' => [], 'idnumbers' => []];
+        foreach ($rows as $row) {
+            if (!empty($row->origincategoryid)) {
+                $archived->ids[(int) $row->origincategoryid] = true;
+            }
+            if ((string) $row->origincategoryidnumber !== '') {
+                $archived->idnumbers[(string) $row->origincategoryidnumber] = true;
             }
         }
-        return $years;
+        return $archived;
     }
 
     /**
@@ -425,14 +454,6 @@ final class rotation {
     }
 
     /**
-     * Archive categories under the task destination that this plugin manages.
-     *
-     * Managed = created by an execution of this task, or explicitly adopted.
-     *
-     * @param stdClass $task Task record.
-     * @return stdClass[] {id, name, idnumber}
-     */
-    /**
      * Yearly categories in the archive this task manages, newest first.
      *
      * Managed means the pruning may delete it: either the task brought it, or
@@ -472,7 +493,7 @@ final class rotation {
      * Archive categories already managed by this task, with their academic year resolved.
      *
      * @param stdClass $task Rotation task record.
-     * @return array Category records with id, name, idnumber, parent and year.
+     * @return array Category records with id, name, idnumber and parent.
      */
     private static function managed_archive_categories(stdClass $task): array {
         global $DB;
@@ -501,6 +522,7 @@ final class rotation {
                 'id' => (int) $record->id,
                 'name' => $record->name,
                 'idnumber' => $record->idnumber,
+                'parent' => (int) $record->parent,
             ];
         }
         return $categories;

@@ -19,8 +19,8 @@
  *
  * The plugin stores user references as part of its administrative audit
  * trail: who created each task, who receives its notifications, who
- * cancelled a scheduled remote deletion and who excluded a category from
- * pruning. Personal data is limited to those user ids; deleting a user's
+ * cancelled a scheduled remote deletion, who excluded a category from
+ * pruning and who adopted one. Personal data is limited to those user ids; deleting a user's
  * data anonymises the references without removing the operational records.
  *
  * @package    local_coursetransfermanager
@@ -73,6 +73,13 @@ class provider implements
             'excludedat' => 'privacy:metadata:local_coursetransfermanager_prune:excludedat',
         ], 'privacy:metadata:local_coursetransfermanager_prune');
 
+        $collection->add_database_table('local_coursetransfermanager_adopted', [
+            'adoptedby' => 'privacy:metadata:local_coursetransfermanager_adopted:adoptedby',
+            'timecreated' => 'privacy:metadata:local_coursetransfermanager_adopted:timecreated',
+        ], 'privacy:metadata:local_coursetransfermanager_adopted');
+
+        $collection->add_subsystem_link('core_message', [], 'privacy:metadata:core_message');
+
         return $collection;
     }
 
@@ -95,7 +102,8 @@ class provider implements
 
         $found = $DB->count_records_sql($sql, $params) > 0
             || $DB->record_exists('local_coursetransfermanager_executions', ['deletecancelledby' => $userid])
-            || $DB->record_exists('local_coursetransfermanager_prune', ['excludedby' => $userid]);
+            || $DB->record_exists('local_coursetransfermanager_prune', ['excludedby' => $userid])
+            || $DB->record_exists('local_coursetransfermanager_adopted', ['adoptedby' => $userid]);
 
         if ($found) {
             $contextlist->add_system_context();
@@ -130,6 +138,11 @@ class provider implements
         $userlist->add_from_sql(
             'excludedby',
             'SELECT excludedby FROM {local_coursetransfermanager_prune} WHERE excludedby IS NOT NULL',
+            []
+        );
+        $userlist->add_from_sql(
+            'adoptedby',
+            'SELECT adoptedby FROM {local_coursetransfermanager_adopted} WHERE adoptedby > 0',
             []
         );
 
@@ -210,6 +223,18 @@ class provider implements
             ];
         }, $DB->get_records('local_coursetransfermanager_prune', ['excludedby' => $userid], 'id', 'id, categoryname, excludedat')));
 
+        $data->adoptions = array_values(array_map(static function (\stdClass $adoption): array {
+            return [
+                'category' => (string) $adoption->categoryname,
+                'adoptedat' => transform::datetime($adoption->timecreated),
+            ];
+        }, $DB->get_records(
+            'local_coursetransfermanager_adopted',
+            ['adoptedby' => $userid],
+            'id',
+            'id, categoryname, timecreated'
+        )));
+
         writer::with_context($systemcontext)->export_data($subcontext, $data);
     }
 
@@ -234,6 +259,8 @@ class provider implements
         $DB->set_field_select('local_coursetransfermanager_tasks', 'notifyrecipients', null, '1 = 1');
         $DB->set_field_select('local_coursetransfermanager_executions', 'deletecancelledby', null, 'deletecancelledby IS NOT NULL');
         $DB->set_field_select('local_coursetransfermanager_prune', 'excludedby', null, 'excludedby IS NOT NULL');
+        // NOT NULL column: 0 means "nobody", as for usercreated.
+        $DB->set_field_select('local_coursetransfermanager_adopted', 'adoptedby', 0, 'adoptedby > 0');
     }
 
     /**
@@ -278,6 +305,7 @@ class provider implements
         $DB->set_field('local_coursetransfermanager_tasks', 'usercreated', 0, ['usercreated' => $userid]);
         $DB->set_field('local_coursetransfermanager_executions', 'deletecancelledby', null, ['deletecancelledby' => $userid]);
         $DB->set_field('local_coursetransfermanager_prune', 'excludedby', null, ['excludedby' => $userid]);
+        $DB->set_field('local_coursetransfermanager_adopted', 'adoptedby', 0, ['adoptedby' => $userid]);
 
         // Remove the user from every comma-separated recipient list.
         $params = ['pattern' => '%,' . $userid . ',%'];

@@ -6,8 +6,8 @@
 <h1 align="center">Gestor de transferències de cursos</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.1.1-informational" alt="Versió">
-  <a href="https://moodle.org"><img src="https://img.shields.io/badge/Moodle-4.5%20--%205.1-orange?logo=moodle" alt="Moodle"></a>
+  <img src="https://img.shields.io/badge/version-2.2.0-informational" alt="Versió">
+  <a href="https://moodle.org"><img src="https://img.shields.io/badge/Moodle-4.5%20--%205.3-orange?logo=moodle" alt="Moodle"></a>
   <img src="https://img.shields.io/badge/PHP-8.1%2B-777BB4?logo=php&logoColor=white" alt="PHP">
   <img src="https://img.shields.io/badge/License-GPL--3.0-green" alt="Llicència">
   <a href="https://tresipunt.com"><img src="https://img.shields.io/badge/made%20by-Tresipunt-F84015" alt="Fet per Tresipunt"></a>
@@ -44,13 +44,17 @@ fins al moment en què passa.
 - **Pantalla de seguiment** — què s'està portant ara, què es llançarà després
   i tot el que s'esborrarà, amb un registre unificat; cada petició enllaça al
   seu detall fi a Course Transfer.
-- **Vuit avisos del cicle de vida** — campana i correu a cada fita, inclòs un
-  **avís previ amb enllaç per cancel·lar** abans d'esborrar a l'origen, i un
-  avís quan un esborrament queda **retingut** per una comprovació de
-  seguretat.
+- **Nou avisos del cicle de vida** — campana i correu a cada fita, inclòs un
+  **avís previ amb enllaç per cancel·lar** abans d'esborrar a l'origen, un avís
+  quan un esborrament queda **retingut** per una comprovació de seguretat i la
+  petició d'**aprovar** el primer esborrament d'una tasca.
 - **Panys de seguretat** — l'original mai no s'esborra si la restauració no
-  consta completada i la còpia arxivada no segueix aquí amb els seus cursos; a
-  més, un **fre d'emergència** que pausa tots els esborraments de cop.
+  consta completada, si algun curs restaurat ja no és a l'arxiu o si l'origen ha
+  canviat des d'aleshores; el primer esborrament de cada tasca espera una
+  persona, i un **fre d'emergència** pausa tots els esborraments de cop (vegeu
+  *Salvaguardes*).
+- **Simulació** — què arxivaria, esborraria i podaria una tasca ara mateix, sense
+  tocar res.
 
 ## 🧭 Casos d'ús
 
@@ -95,10 +99,10 @@ fins al moment en què passa.
   que ha sortit de la finestra de producció i demana a Course Transfer que el
   restauri; després el recol·loca sota la categoria d'arxiu triada.
 - Una restauració només està **completada** quan Course Transfer ho confirma;
-  aquí comença el compte enrere de la retenció.
+  l'esborrament a l'origen no s'executa mai abans (vegeu *Salvaguardes*).
 - Abans d'esborrar a l'origen s'envia un **avís previ** (dies configurables) i
-  es comprova que la còpia arxivada hi és realment. Si no hi és, l'esborrament
-  es **reté** i s'informa, en lloc d'executar-se.
+  es tornen a fer totes les comprovacions de seguretat. Si alguna falla,
+  l'esborrament es **reté** i s'informa, en lloc d'executar-se.
 - Les categories que van arribar a l'arxiu **sense** la tasca són invisibles per
   a la poda a propòsit: és el que protegeix el contingut aliè. Adoptar-ne una
   perquè la tasca pugui esborrar-la és una decisió explícita, auditada i
@@ -110,9 +114,10 @@ fins al moment en què passa.
 
 | Requisit | Versió |
 |---|---|
-| Moodle | 4.5 – 5.1 |
+| Moodle | 4.5, 5.1 o 5.3 |
 | PHP | 8.1+ |
-| Altres connectors | `local_coursetransfer` **2.0.0 o superior en aquesta plataforma** (la plataforma d'origen remota només necessita els seus serveis web de backend estables) |
+| Altres connectors | `local_coursetransfer` **2.2.0 o superior en aquesta plataforma** (la plataforma d'origen remota només necessita els seus serveis web de backend estables; es recomana 2.2.0) |
+| Cron | En marxa a **les dues** plataformes |
 
 ## 🚀 Instal·lació
 
@@ -132,8 +137,10 @@ transferències de cursos**:
 
 | Paràmetre | Efecte |
 |---|---|
-| **Dies d'avís abans d'esborrar a l'origen** | Amb quanta antelació s'envia l'avís previ cancel·lable abans d'un esborrament programat. Per defecte: 7. |
-| **Dies de gràcia abans de podar l'arxiu** | Temps entre l'anunci dels candidats a la poda i el seu esborrament, per poder excloure'ls. Per defecte: 7. |
+| **Dies d'avís abans d'esborrar a l'origen** | Amb quanta antelació s'envia l'avís previ cancel·lable abans d'un esborrament programat. Per defecte: 7, mínim 1. |
+| **Dies de gràcia abans de podar l'arxiu** | Temps entre l'anunci dels candidats a la poda i el seu esborrament, per poder excloure'ls. Per defecte: 7, mínim 1. |
+| **Retenir l'esborrament si l'origen ha canviat (R3)** (`holdiforiginchanged`) | Activat per defecte. Vegeu *Salvaguardes*. |
+| **Aprovar el primer esborrament de cada tasca** (`requirefirstdeletionapproval`) | Activat per defecte. Vegeu *Salvaguardes*. |
 | **Pausar tots els esborraments (fre d'emergència)** | Mentre està actiu no s'executa cap esborrament ni poda i les seves dates es van posposant, de manera que treure la pausa mai no provoca un embús. Les restauracions no es veuen afectades. |
 | **Mes d'inici del curs acadèmic** | Es fa servir per saber quin curs està en marxa quan s'executa una tasca. Abans d'aquest mes el curs en marxa segueix essent l'anterior: al maig del 2026 el curs és 2025/26. Per defecte: setembre. |
 | **Màxim de categories arxivades per execució** | Límit perquè un curs endarrerit no inundi l'origen de restauracions simultànies. |
@@ -144,6 +151,40 @@ d'història.
 
 Els canals d'avís es gestionen amb les preferències de notificació estàndard
 de Moodle, per lloc i per usuari.
+
+## 🛡️ Salvaguardes
+
+La tasca parla amb l'origen **com el seu creador** (o com qui prem «Executa
+ara»): aquest usuari necessita un compte equivalent a l'origen amb les
+capacitats que Course Transfer hi exigeix. L'esborrament a l'origen es programa
+als **dies de retenció** de la tasca des del llançament, però mai no s'executa
+abans que Course Transfer doni la restauració per **completada**.
+
+Esborrar a l'origen és l'únic pas que elimina contingut que potser no existeix
+enlloc més. Just abans d'executar-lo es fan aquestes comprovacions; si alguna
+falla, l'esborrament queda **retingut**, s'ajorna i s'avisa, mai no s'executa en
+silenci:
+
+| Salvaguarda | Què comprova | Paràmetre |
+|---|---|---|
+| **R1 — restauració verificada** | Course Transfer ha donat la restauració per completada (no només llançada) i verificada: sense mòduls ni fitxers que faltin i amb els cursos restaurats iguals a l'origen. | Sempre activa |
+| **R2 — arxiu intacte** | Tots els cursos d'aquesta restauració continuen en aquesta plataforma, dins de la categoria arxivada. | Sempre activa |
+| **Identitat utilitzable** | El creador de la tasca existeix i és actiu: mai no es demana res a l'origen amb una altra identitat. | Sempre activa |
+| **R3 — origen sense canvis** | La categoria de l'origen continua tenint els cursos que es van arxivar; cursos nous o desapareguts, o un origen que no respon, retenen l'esborrament. L'origen no informa de dates de modificació, així que només es compara la llista de cursos. | `holdiforiginchanged` (activat) |
+| **Aprovació del primer esborrament** | El primer esborrament de cada tasca, i el primer després de canviar-ne la màscara, els anys o l'origen, espera a *Execucions i esborraments* que un gestor l'aprovi. Després d'aprovar-lo, les salvaguardes es tornen a comprovar. | `requirefirstdeletionapproval` (activat) |
+| **Avís previ** | S'envia un avís cancel·lable abans de l'esborrament, mai a la mateixa passada del cron. | Dies d'avís (≥ 1) |
+| **Fre d'emergència** | Mentre està actiu no s'executa cap esborrament ni poda i les dates s'ajornen. | Pausar tots els esborraments |
+
+La poda de l'arxiu té les seves pròpies garanties: només considera categories que
+la tasca va portar o adoptar, anuncia els candidats amb un període de gràcia (es
+poden excloure) i torna a comprovar cadascun abans d'esborrar-lo; el que ja no
+compleix la política queda exclòs per sempre. A l'origen, Course Transfer aplica
+les seves pròpies proteccions (retenció a la paperera, esdeveniments d'auditoria).
+
+**Simula** una tasca (botó a la vista del cicle de vida) per veure què arxivaria,
+quins esborraments s'executarien, quedarien retinguts o esperarien aprovació i què
+podaria, sense canviar res. Cada esborrament, retenció, aprovació, cancel·lació i
+poda queda també com a esdeveniment als registres del lloc.
 
 ## 🗑️ Desinstal·lació
 

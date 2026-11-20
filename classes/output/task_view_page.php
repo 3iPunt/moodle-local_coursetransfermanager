@@ -140,6 +140,10 @@ class task_view_page implements renderable, templatable {
             '/local/coursetransfermanager/executions.php',
             ['taskid' => $this->task->id]
         ))->out(false);
+        $data->simulateurl = (new moodle_url(
+            '/local/coursetransfermanager/simulate.php',
+            ['id' => $this->task->id]
+        ))->out(false);
 
         $data->enabled = !empty($this->task->enabled);
         $data->originhost = $this->originhost !== null ? s($this->originhost) : null;

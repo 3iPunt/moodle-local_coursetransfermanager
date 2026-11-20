@@ -27,10 +27,10 @@ require_once(__DIR__ . '/../../config.php');
 
 use local_coursetransfermanager\external\wizard_external;
 use local_coursetransfermanager\manager\agenda;
+use local_coursetransfermanager\manager\lifecycle_config;
 use local_coursetransfermanager\manager\origin;
 use local_coursetransfermanager\manager\rotation;
 use local_coursetransfermanager\manager\task_manager;
-use local_coursetransfermanager\notification\notifier;
 use local_coursetransfermanager\output\task_view_page;
 
 global $PAGE, $OUTPUT, $DB;
@@ -80,12 +80,8 @@ $projection = (object)wizard_external::policy_preview(
     (int)$task->id
 );
 
-$warningdays = get_config('local_coursetransfermanager', 'deletionwarningdays');
-$warningdays = ($warningdays === false || $warningdays === '')
-    ? notifier::DEFAULT_WARNING_DAYS : (int)$warningdays;
-$gracedays = get_config('local_coursetransfermanager', 'prunegracedays');
-$gracedays = ($gracedays === false || $gracedays === '')
-    ? task_manager::DEFAULT_PRUNE_GRACE_DAYS : (int)$gracedays;
+$warningdays = lifecycle_config::warning_days();
+$gracedays = lifecycle_config::grace_days();
 
 $pageobj = new task_view_page(
     $task,

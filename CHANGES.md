@@ -2,6 +2,127 @@
 
 All notable changes to this plugin. Versions follow [semantic versioning](https://semver.org).
 
+## 2.2.0 — 2026-11-20 (`2026112001`)
+
+Safeguards release: nothing is deleted from the origin unless the archived copy
+is complete and the origin has not changed since, and **Moodle 5.3 support**.
+Supported: Moodle 4.5, 5.1 and 5.3 (`requires` 4.5, `supported = [405, 503]`).
+Requires **Course Transfer 2.2.0** (`local_coursetransfer` ≥ `2026112001`) on
+this platform; the remote origin only needs Course Transfer's stable backend web
+services (≥ `2026051301`), although upgrading it to 2.2.0 is strongly advised.
+No database changes.
+
+### ⚠️ Breaking changes
+
+- **Course Transfer 2.2.0 is required on this platform.** Upgrade
+  `local_coursetransfer` first, or in the same upgrade.
+- **The task's creator is its identity in the origin.** Listings, restores and
+  deletions are asked of the origin as the user who created the task (or, for
+  "Run now", the user who presses it), never as whoever runs the cron. That user
+  needs an equivalent account in the origin, with the capabilities Course
+  Transfer requires there (backup, and removal of categories). If the creator no
+  longer exists or is suspended, runs fail with `creator_unavailable` and due
+  deletions are held: edit and save the task to take it over.
+- **The first deletion in the origin of each task waits for approval**
+  (`requirefirstdeletionapproval`, on by default), and so does the first one after
+  its mask, years in production, years in the archive or origin change. Once a
+  person approves it in **Executions and deletions**, the next deletions of the
+  same policy run on their own. Upgraded tasks count as never approved: their
+  next deletion waits too.
+- **A deletion is held if the origin changed after archiving** (R3,
+  `holdiforiginchanged`, on by default): right before deleting, the task asks the
+  origin for the category's courses and compares them with what it archived. New
+  or removed courses, or an origin that does not answer, hold the deletion and
+  notify. The origin does not report when its courses were modified, so only the
+  course list is compared.
+- **R1 requires a verified restore**: the deletion in the origin only runs when
+  Course Transfer reports the restoration as complete **and** verified (no
+  missing modules or files, and the restored courses match the origin manifest).
+  A restore completed with issues holds the deletion.
+- **R2 is stricter**: every course of the execution's restore must still be in
+  the archive, inside the archived category. Moving or deleting one of them by
+  hand holds the deletion in the origin.
+- **The notice and grace periods are at least one day.** `deletionwarningdays`
+  and `prunegracedays` only accept whole days from 1 to 9999; a stored `0` is read
+  as 1, so a notice and its deletion never happen in the same cron pass.
+- **Archive pruning is checked again before running.** A candidate that stopped
+  meeting the policy during its grace period (no longer managed by the task,
+  moved out of its destination, not old enough) is not pruned and is excluded for
+  good; only a person can bring it back.
+
+### Added
+
+- **Simulation** (`simulate.php`, button **Simulate** on the task view): what the
+  task would archive, delete from the origin (with the result of each safety rule)
+  and prune, right now. The origin is only read; nothing is launched, deleted or
+  saved.
+- **Approval of the first deletion** (`approve.php`, from the deletion card), with
+  its notification (N9) and the new deletion status *Waiting for approval*.
+- **Safety copy of the backups** on this platform for the restores launched by a
+  task (Course Transfer keeps the `.mbz` until the origin has been deleted and
+  its recycle bin retention has passed).
+- **Settings** `holdiforiginchanged` and `requirefirstdeletionapproval` (both on).
+- **Audit events** of the destructive lifecycle: `deletion_requested`,
+  `deletion_executed`, `deletion_held`, `deletion_cancelled`,
+  `deletion_approved`, `prune_announced`, `prune_executed` and
+  `prune_excluded`.
+- Web service functions `local_coursetransfermanager_deletion_approve` and
+  `local_coursetransfermanager_task_simulate` (capability
+  `local/coursetransfermanager:managetasks`).
+- Behat scenarios for the panel, the task wizard and the tracking screen.
+
+### Fixed
+
+- **Every task created with the wizard kept 2 years in production**, whatever the
+  user chose: the value was not saved. A task with another value archived and
+  deleted from the origin a different year than shown. **Review your tasks.**
+- **A run could archive the same category twice**: a restore that failed half way
+  is now counted as brought, and the cron and "Run now" share a lock per task.
+- **The restored category was located by idnumber**, so a duplicate idnumber
+  could make the task move or manage a category it did not bring. It is now
+  resolved from the restore request itself; when that is not certain, the
+  category is left where it is, not managed, and its deletion in the origin is
+  held.
+- A due deletion could be cancelled while it was being sent to the origin, or
+  sent twice by two cron runs: it is now claimed before calling the origin, and a
+  claim left by a crashed cron is released after one hour.
+- An advance notice sent late (cron down, short retention) no longer arrives at
+  the same time as the deletion: the deletion is moved to after the notice period.
+- A cron expression that never fires (31 February) is rejected by the wizard, and
+  tasks that lost their schedule get one without running.
+- A transient origin failure is retried within the same cycle (up to three
+  times) instead of waiting a year; a category that fails three times waits for
+  the next cycle.
+- "Run now" reports which categories were launched and which failed, and refuses
+  to start while the task is running.
+- Notifications to a suspended recipient go to the site administrator instead.
+
+### Permissions and privacy
+
+- `local/coursetransfermanager:managetasks` declares its risks
+  (`RISK_DATALOSS`, `RISK_CONFIG`, `RISK_PERSONAL`).
+- The user search of the wizard only shows and searches emails for users allowed
+  to see them (`showuseridentity`).
+
+### Changed
+
+- The privacy provider also declares the adopted categories (who adopted each
+  one) and the notifications sent through the messaging system.
+
+### Upgrade notes
+
+- Upgrade `local_coursetransfer` to 2.2.0 on this platform, and preferably on the
+  origins too (its improvements only apply to the sites that run it).
+- Check that the creator of each task exists, is active and has an equivalent
+  user with the right capabilities in the origin. Run **Simulate** on each task:
+  it shows what the next run would archive, and which deletions would be held or
+  wait for approval.
+- Review the **years in production** of every task created with the wizard (see
+  Fixed).
+- Expect each task's next deletion in the origin to wait for approval, unless
+  `requirefirstdeletionapproval` is turned off.
+- Cron must run on both platforms.
+
 ## 2.1.1 — 2026-09-15
 
 Housekeeping release required for publication. **No behaviour changes.**

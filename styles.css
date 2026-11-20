@@ -2,7 +2,7 @@
 
 /*
  * ============================================================
- * Course Transfer family design system (Tresipunt / Claude Design).
+ * Course Transfer family design system.
  * Same tokens and base components as local_coursetransfer, scoped
  * under .local-coursetransfermanager so nothing leaks outside the
  * plugin's content region. The page shell stays with the theme

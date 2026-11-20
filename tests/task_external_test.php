@@ -18,6 +18,7 @@ namespace local_coursetransfermanager;
 
 use local_coursetransfermanager\external\task_external;
 use local_coursetransfermanager\manager\deletion_manager;
+use local_coursetransfermanager\manager\prune_manager;
 
 /**
  * Tests for the panel AJAX endpoints (toggle, run-now guard, cancellations).
@@ -172,5 +173,76 @@ final class task_external_test extends \advanced_testcase {
             'local_coursetransfermanager_adopted',
             ['taskid' => $taskid, 'categoryid' => $yearly->id]
         ));
+    }
+
+    /**
+     * Excluding an announced pruning candidate records who and when, and the
+     * candidate leaves the pending list so the pruning never deletes it.
+     */
+    public function test_exclude_prune(): void {
+        global $DB, $USER;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_coursetransfermanager');
+        $category = $this->getDataGenerator()->create_category(['idnumber' => 'SJD2015']);
+        $task = $generator->create_task(['targetcategoryid' => $category->parent]);
+        $candidate = $generator->create_prune(['taskid' => $task->id, 'categoryid' => $category->id]);
+
+        $result = task_external::exclude_prune((int)$candidate->id);
+        $result = \core_external\external_api::clean_returnvalue(task_external::exclude_prune_returns(), $result);
+
+        $this->assertTrue($result['excluded']);
+        $this->assertStringContainsString(fullname($USER), $result['audit']);
+        $row = $DB->get_record('local_coursetransfermanager_prune', ['id' => $candidate->id], '*', MUST_EXIST);
+        $this->assertSame(prune_manager::STATUS_EXCLUDED, $row->status);
+        $this->assertEquals($USER->id, $row->excludedby);
+        $this->assertNotEmpty($row->excludedat);
+        $this->assertCount(0, prune_manager::get_pending((int)$task->id));
+    }
+
+    /**
+     * A candidate that is no longer announced (already excluded or pruned) cannot be excluded.
+     */
+    public function test_exclude_prune_rejects_closed_candidates(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_coursetransfermanager');
+        $category = $this->getDataGenerator()->create_category();
+        $task = $generator->create_task();
+        $candidate = $generator->create_prune([
+            'taskid' => $task->id,
+            'categoryid' => $category->id,
+            'status' => prune_manager::STATUS_DONE,
+        ]);
+
+        try {
+            task_external::exclude_prune((int)$candidate->id);
+            $this->fail('A pruned candidate must not be excludable');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('prunenotexcludable', $e->errorcode);
+        }
+        $this->assertSame(
+            prune_manager::STATUS_DONE,
+            $DB->get_field('local_coursetransfermanager_prune', 'status', ['id' => $candidate->id])
+        );
+    }
+
+    /**
+     * Excluding a candidate requires the manage capability.
+     */
+    public function test_exclude_prune_requires_capability(): void {
+        $this->resetAfterTest();
+
+        $generator = $this->getDataGenerator()->get_plugin_generator('local_coursetransfermanager');
+        $category = $this->getDataGenerator()->create_category();
+        $task = $generator->create_task();
+        $candidate = $generator->create_prune(['taskid' => $task->id, 'categoryid' => $category->id]);
+
+        $this->setUser($this->getDataGenerator()->create_user());
+        $this->expectException(\required_capability_exception::class);
+        task_external::exclude_prune((int)$candidate->id);
     }
 }

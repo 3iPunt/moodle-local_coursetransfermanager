@@ -25,6 +25,7 @@
 namespace local_coursetransfermanager\output;
 
 use local_coursetransfermanager\manager\agenda;
+use local_coursetransfermanager\manager\deletion_manager;
 use local_coursetransfermanager\manager\task_manager;
 use moodle_url;
 use renderable;
@@ -297,6 +298,10 @@ class executions_page implements renderable, templatable {
                     format_time(max(0, $item->date - $this->now))
                 ),
                 'urgent' => $urgent && $item->type === agenda::TYPE_DELETION,
+                'awaiting' => ($item->deletestatus ?? '') === deletion_manager::STATUS_AWAITING_APPROVAL,
+                'approveurl' => !empty($item->executionid)
+                    ? (new moodle_url('/local/coursetransfermanager/approve.php', ['id' => $item->executionid]))->out(false)
+                    : null,
             ];
         }
         return $cards;

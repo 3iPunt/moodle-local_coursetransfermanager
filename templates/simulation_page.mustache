@@ -1,0 +1,137 @@
+{{!
+    This file is part of Moodle - https://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_coursetransfermanager/simulation_page
+
+    Dry run of a task: what it would archive, delete from the origin (with the
+    safety rules) and prune, right now. Nothing was done to produce it.
+
+    Context variables required for this template:
+    * headertitle, headerdesc, taskurl, generated, identity - strings
+    * archive array {name, idnumber, year, thisrun}, archiveerror string
+    * deletions array {name, date, status, held, delete, rule, reason, passed, notes}
+    * prunings array {name, idnumber, year, status, date, prune}
+
+    Example context (json):
+    {
+      "headertitle": "Simulación: Archivo anual", "headerdesc": "Nada se ha ejecutado.", "taskurl": "#",
+      "generated": "19 nov 2026",
+      "identity": "El origen se ha consultado como Admin User, creador de la tarea: la misma identidad que usa la ejecución real.",
+      "hasarchive": true, "archiveerror": "",
+      "archive": [{"name": "Curso 2023-24", "idnumber": "2023-2024", "year": "2023/24", "thisrun": true}],
+      "hasdeletions": true,
+      "deletions": [{"name": "Curso 2022-23", "date": "1 dic 2026", "status": "Retenido", "held": true,
+                     "rule": "R3", "reason": "Hay cursos nuevos", "passed": "R1+R2+R2v", "notes": ""}],
+      "hasprunings": false, "prunings": []
+    }
+}}
+<div class="local-coursetransfermanager ct-app" id="ctm-simulation">
+    <div class="ct-hero">
+        {{> local_coursetransfermanager/components/page_header }}
+        <div class="ct-hero-side">
+            <a class="ct-btn ct-btn--secondary" href="{{ taskurl }}">{{#str}} sim_back, local_coursetransfermanager {{/str}}</a>
+        </div>
+    </div>
+
+    <div class="ct-banner ct-banner--info">
+        <i class="fa fa-flask" aria-hidden="true"></i>
+        <span>{{#str}} sim_nothingdone, local_coursetransfermanager, {{ generated }} {{/str}}</span>
+        {{#identity}}<span class="ct-text-muted">{{ identity }}</span>{{/identity}}
+    </div>
+
+    <section class="ct-card">
+        <h2 class="ct-section-title">{{#str}} sim_archive_title, local_coursetransfermanager {{/str}}</h2>
+        {{#archiveerror}}
+        <p class="ct-text-danger">{{#str}} sim_archive_error, local_coursetransfermanager {{/str}} {{ archiveerror }}</p>
+        {{/archiveerror}}
+        {{^archiveerror}}
+        {{^hasarchive}}<p class="ct-text-muted">{{#str}} sim_archive_none, local_coursetransfermanager {{/str}}</p>{{/hasarchive}}
+        {{/archiveerror}}
+        {{#hasarchive}}
+        <table class="table table-sm">
+            <thead><tr>
+                <th scope="col">{{#str}} sim_col_category, local_coursetransfermanager {{/str}}</th>
+                <th scope="col">{{#str}} sim_col_year, local_coursetransfermanager {{/str}}</th>
+                <th scope="col">{{#str}} sim_col_when, local_coursetransfermanager {{/str}}</th>
+            </tr></thead>
+            <tbody>
+            {{#archive}}
+            <tr>
+                <td>{{ name }} <code>{{ idnumber }}</code></td>
+                <td>{{ year }}</td>
+                <td>{{#thisrun}}{{#str}} sim_archive_thisrun, local_coursetransfermanager {{/str}}{{/thisrun}}{{^thisrun}}{{#str}} sim_archive_later, local_coursetransfermanager {{/str}}{{/thisrun}}</td>
+            </tr>
+            {{/archive}}
+            </tbody>
+        </table>
+        {{/hasarchive}}
+    </section>
+
+    <section class="ct-card">
+        <h2 class="ct-section-title">{{#str}} sim_delete_title, local_coursetransfermanager {{/str}}</h2>
+        {{^hasdeletions}}<p class="ct-text-muted">{{#str}} sim_delete_none, local_coursetransfermanager {{/str}}</p>{{/hasdeletions}}
+        {{#hasdeletions}}
+        <table class="table table-sm">
+            <thead><tr>
+                <th scope="col">{{#str}} sim_col_category, local_coursetransfermanager {{/str}}</th>
+                <th scope="col">{{#str}} sim_col_date, local_coursetransfermanager {{/str}}</th>
+                <th scope="col">{{#str}} sim_col_result, local_coursetransfermanager {{/str}}</th>
+                <th scope="col">{{#str}} sim_col_rules, local_coursetransfermanager {{/str}}</th>
+            </tr></thead>
+            <tbody>
+            {{#deletions}}
+            <tr>
+                <td>{{ name }}</td>
+                <td>{{ date }}</td>
+                <td><strong>{{ status }}</strong>{{#held}} ({{ rule }}){{/held}}</td>
+                <td>
+                    {{#passed}}<span class="ct-badge ct-badge--success">{{ passed }}</span>{{/passed}}
+                    {{#reason}}<div>{{ reason }}</div>{{/reason}}
+                    {{#notes}}<div class="ct-text-muted">{{ notes }}</div>{{/notes}}
+                </td>
+            </tr>
+            {{/deletions}}
+            </tbody>
+        </table>
+        {{/hasdeletions}}
+    </section>
+
+    <section class="ct-card">
+        <h2 class="ct-section-title">{{#str}} sim_prune_title, local_coursetransfermanager {{/str}}</h2>
+        {{^hasprunings}}<p class="ct-text-muted">{{#str}} sim_prune_none, local_coursetransfermanager {{/str}}</p>{{/hasprunings}}
+        {{#hasprunings}}
+        <table class="table table-sm">
+            <thead><tr>
+                <th scope="col">{{#str}} sim_col_category, local_coursetransfermanager {{/str}}</th>
+                <th scope="col">{{#str}} sim_col_year, local_coursetransfermanager {{/str}}</th>
+                <th scope="col">{{#str}} sim_col_result, local_coursetransfermanager {{/str}}</th>
+                <th scope="col">{{#str}} sim_col_date, local_coursetransfermanager {{/str}}</th>
+            </tr></thead>
+            <tbody>
+            {{#prunings}}
+            <tr>
+                <td>{{ name }} <code>{{ idnumber }}</code></td>
+                <td>{{ year }}</td>
+                <td><strong>{{ status }}</strong></td>
+                <td>{{ date }}</td>
+            </tr>
+            {{/prunings}}
+            </tbody>
+        </table>
+        {{/hasprunings}}
+    </section>
+</div>

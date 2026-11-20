@@ -26,6 +26,7 @@ namespace local_coursetransfermanager\notification;
 
 use core\message\message;
 use core_user;
+use local_coursetransfermanager\manager\lifecycle_config;
 use moodle_url;
 use stdClass;
 
@@ -54,18 +55,13 @@ final class notifier {
         'deletion_held',
     ];
 
-    /** @var int Default days of advance notice before an origin deletion. */
-    public const DEFAULT_WARNING_DAYS = 7;
-
     /**
      * Advance-notice lead time for origin deletions, in seconds.
      *
      * @return int
      */
     public static function warning_lead_seconds(): int {
-        $days = get_config('local_coursetransfermanager', 'deletionwarningdays');
-        $days = ($days === false || $days === '') ? self::DEFAULT_WARNING_DAYS : (int) $days;
-        return max(0, $days) * DAYSECS;
+        return lifecycle_config::warning_days() * DAYSECS;
     }
 
     /**
@@ -295,6 +291,33 @@ final class notifier {
     }
 
     /**
+     * N9 — A verified origin deletion waits for a manager to approve it.
+     *
+     * Goes through the deletion_held provider: same audience and same "nothing was deleted" nature.
+     *
+     * @param stdClass $task Task record.
+     * @param string $categoryname Category whose deletion awaits approval.
+     * @return void
+     */
+    public static function deletion_approval(stdClass $task, string $categoryname): void {
+        $url = new moodle_url('/local/coursetransfermanager/executions.php', ['taskid' => $task->id, 'tab' => 'deletions']);
+        self::send(
+            $task,
+            'deletion_held',
+            get_string('notif_approval_subject', 'local_coursetransfermanager', self::a([
+                'categoryname' => $categoryname,
+            ])),
+            get_string('notif_approval_body', 'local_coursetransfermanager', self::a([
+                'categoryname' => $categoryname,
+                'taskname' => $task->name,
+                'url' => $url->out(false),
+            ])),
+            get_string('notif_approval_small', 'local_coursetransfermanager'),
+            $url
+        );
+    }
+
+    /**
      * Send a notification to every recipient of the task, honouring its level.
      *
      * @param stdClass $task Task record.
@@ -464,7 +487,8 @@ final class notifier {
         $users = [];
         foreach (array_unique($ids) as $id) {
             $user = core_user::get_user($id, '*', IGNORE_MISSING);
-            if ($user && empty($user->deleted)) {
+            // A suspended user cannot act on the notice: the admin fallback then gets it.
+            if ($user && empty($user->deleted) && empty($user->suspended)) {
                 $users[$user->id] = $user;
             }
         }

@@ -6,8 +6,8 @@
 <h1 align="center">Course Transfer Manager</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.1.1-informational" alt="Version">
-  <a href="https://moodle.org"><img src="https://img.shields.io/badge/Moodle-4.5%20--%205.1-orange?logo=moodle" alt="Moodle"></a>
+  <img src="https://img.shields.io/badge/version-2.2.0-informational" alt="Version">
+  <a href="https://moodle.org"><img src="https://img.shields.io/badge/Moodle-4.5%20--%205.3-orange?logo=moodle" alt="Moodle"></a>
   <img src="https://img.shields.io/badge/PHP-8.1%2B-777BB4?logo=php&logoColor=white" alt="PHP">
   <img src="https://img.shields.io/badge/License-GPL--3.0-green" alt="License">
   <a href="https://tresipunt.com"><img src="https://img.shields.io/badge/made%20by-Tresipunt-F84015" alt="Made by Tresipunt"></a>
@@ -42,12 +42,16 @@ moment it happens.
 - **Tracking screen** — what is running now, what fires next, and everything
   that is going to be deleted, with a unified history; each request links to its
   fine-grained detail in Course Transfer.
-- **Eight lifecycle notifications** — bell and email at every milestone,
+- **Nine lifecycle notifications** — bell and email at every milestone,
   including an **advance notice with a cancel link** before deleting in the
-  origin, and a notice when a deletion is **held** by a safety check.
+  origin, a notice when a deletion is **held** by a safety check, and a request
+  to **approve** a task's first deletion.
 - **Safety locks** — the original is never deleted unless the restoration is
-  registered as complete and the archived copy still exists locally with courses
-  in it; plus an **emergency switch** that pauses every deletion at once.
+  complete, every restored course is still in the archive and the origin has not
+  changed since; the first deletion of each task waits for a person; and an
+  **emergency switch** pauses every deletion at once (see *Safeguards*).
+- **Simulation** — what a task would archive, delete and prune right now,
+  without touching anything.
 
 ## 🧭 Use cases
 
@@ -90,11 +94,15 @@ moment it happens.
 - On the scheduled date the task reads the origin's categories, picks the year
   that has outstayed the production window and asks Course Transfer to restore
   it, then files it under the chosen archive category.
-- A restoration is only **complete** when Course Transfer says so; that is when
-  the retention countdown starts.
+- The deletion in the origin is scheduled the task's **retention days** after
+  the launch, but it never runs before Course Transfer reports the restoration as
+  **complete**.
 - Before deleting in the origin the plugin sends an **advance notice** (days
-  configurable) and checks that the archived copy is really there. If it is not,
-  the deletion is **held** and reported instead of executed.
+  configurable) and runs every safeguard again. If one fails, the deletion is
+  **held** and reported instead of executed.
+- The task talks to the origin **as its creator** (or as whoever presses "Run
+  now"): that user needs an equivalent account in the origin with the
+  capabilities Course Transfer requires there.
 - Categories that reached the archive **without** the task are invisible to the
   pruning by design — that is what protects foreign content. Adopting one so the
   task may delete it is an explicit, audited and reversible decision from the
@@ -106,9 +114,10 @@ moment it happens.
 
 | Requirement | Version |
 |---|---|
-| Moodle | 4.5 – 5.1 |
+| Moodle | 4.5, 5.1 or 5.3 |
 | PHP | 8.1+ |
-| Other plugins | `local_coursetransfer` **2.0.0 or later in this platform** (the remote origin only needs its stable backend web services) |
+| Other plugins | `local_coursetransfer` **2.2.0 or later in this platform** (the remote origin only needs its stable backend web services, 2.2.0 recommended) |
+| Cron | Running on **both** platforms |
 
 ## 🚀 Installation
 
@@ -126,8 +135,10 @@ In **Site administration › Plugins › Local plugins › Course Transfer Manag
 
 | Setting | Effect |
 |---|---|
-| **Days of notice before deleting in the origin** | How long before a scheduled deletion the cancellable advance notice is sent. Default: 7. |
-| **Grace days before pruning the archive** | Time between announcing the pruning candidates and deleting them, so they can be excluded. Default: 7. |
+| **Days of notice before deleting in the origin** | How long before a scheduled deletion the cancellable advance notice is sent. Default: 7, minimum 1. |
+| **Grace days before pruning the archive** | Time between announcing the pruning candidates and deleting them, so they can be excluded. Default: 7, minimum 1. |
+| **Hold the deletion if the origin changed (R3)** (`holdiforiginchanged`) | On by default. See *Safeguards*. |
+| **Approve each task's first deletion** (`requirefirstdeletionapproval`) | On by default. See *Safeguards*. |
 | **Pause every deletion (emergency switch)** | While active, no deletion or pruning runs and their due dates keep sliding forward, so lifting the pause never triggers a backlog. Restorations are unaffected. |
 | **Month the academic year starts** | Used to know which course is running when a task executes. Before that month the running course is still the previous one: in May 2026 the course is 2025/26. Default: September. |
 | **Maximum categories archived per run** | Cap so a delayed year cannot flood the origin with simultaneous restorations. |
@@ -138,6 +149,33 @@ different amounts of history.
 
 Notification channels are managed with Moodle's standard notification
 preferences, per site and per user.
+
+## 🛡️ Safeguards
+
+A deletion in the origin is the only step that removes content that may exist
+nowhere else. Right before it runs, these checks are made; if one fails, the
+deletion is **held**, postponed and notified, never executed silently:
+
+| Safeguard | What it checks | Setting |
+|---|---|---|
+| **R1 — verified restore** | Course Transfer reported the restoration as complete (not just launched) and verified: no missing modules or files, and the restored courses match the origin. | Always on |
+| **R2 — intact archive** | Every course of that restoration is still in this platform, inside the archived category. | Always on |
+| **Usable identity** | The task's creator exists and is active: the origin is never asked under another identity. | Always on |
+| **R3 — unchanged origin** | The origin category still has the courses that were archived; new or removed courses, or an origin that does not answer, hold the deletion. The origin does not report modification dates, so only the course list is compared. | `holdiforiginchanged` (on) |
+| **First-deletion approval** | The first deletion of each task, and the first after its mask, years or origin change, waits in *Executions and deletions* until a manager approves it. The safeguards run again after the approval. | `requirefirstdeletionapproval` (on) |
+| **Advance notice** | A cancellable notice is sent before the deletion, never in the same cron pass. | Days of notice (≥ 1) |
+| **Emergency switch** | While on, no deletion or pruning runs and their dates slide forward. | Pause every deletion |
+
+Pruning the archive has its own guards: only categories the task brought or
+adopted are considered, candidates are announced with a grace period
+(excludable), and each one is checked again before deleting; one that no longer
+meets the policy is excluded for good. On the origin, Course Transfer applies its
+own protections (recycle bin retention, audit events).
+
+**Simulate** a task (button on its lifecycle view) to see what it would archive,
+which deletions would run, be held or wait for approval, and what it would prune,
+without changing anything. Every deletion, hold, approval, cancellation and
+pruning is also recorded as an event in the site logs.
 
 ## 🗑️ Uninstallation
 

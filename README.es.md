@@ -6,8 +6,8 @@
 <h1 align="center">Gestor de transferencias de cursos</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.1.1-informational" alt="Versión">
-  <a href="https://moodle.org"><img src="https://img.shields.io/badge/Moodle-4.5%20--%205.1-orange?logo=moodle" alt="Moodle"></a>
+  <img src="https://img.shields.io/badge/version-2.2.0-informational" alt="Versión">
+  <a href="https://moodle.org"><img src="https://img.shields.io/badge/Moodle-4.5%20--%205.3-orange?logo=moodle" alt="Moodle"></a>
   <img src="https://img.shields.io/badge/PHP-8.1%2B-777BB4?logo=php&logoColor=white" alt="PHP">
   <img src="https://img.shields.io/badge/License-GPL--3.0-green" alt="Licencia">
   <a href="https://tresipunt.com"><img src="https://img.shields.io/badge/made%20by-Tresipunt-F84015" alt="Hecho por Tresipunt"></a>
@@ -43,12 +43,17 @@ en que ocurre.
 - **Pantalla de seguimiento** — qué se está trayendo ahora, qué se lanzará
   después y todo lo que se va a borrar, con un registro unificado; cada petición
   enlaza a su detalle fino en Course Transfer.
-- **Ocho avisos del ciclo de vida** — campana y correo en cada hito, incluido un
-  **aviso previo con enlace para cancelar** antes de borrar en el origen, y un
-  aviso cuando un borrado queda **retenido** por una comprobación de seguridad.
+- **Nueve avisos del ciclo de vida** — campana y correo en cada hito, incluido un
+  **aviso previo con enlace para cancelar** antes de borrar en el origen, un
+  aviso cuando un borrado queda **retenido** por una comprobación de seguridad y
+  la petición de **aprobar** el primer borrado de una tarea.
 - **Candados de seguridad** — el original nunca se borra si la restauración no
-  consta completada y la copia archivada no sigue aquí con sus cursos; además, un
-  **freno de emergencia** que pausa todos los borrados de golpe.
+  consta completada, si algún curso restaurado ya no está en el archivo o si el
+  origen ha cambiado desde entonces; el primer borrado de cada tarea espera a una
+  persona, y un **freno de emergencia** pausa todos los borrados de golpe (ver
+  *Salvaguardas*).
+- **Simulación** — qué archivaría, borraría y podaría una tarea ahora mismo, sin
+  tocar nada.
 
 ## 🧭 Casos de uso
 
@@ -93,9 +98,9 @@ en que ocurre.
   que se ha salido de la ventana de producción y pide a Course Transfer que lo
   restaure; después lo recoloca bajo la categoría de archivo elegida.
 - Una restauración solo está **completada** cuando Course Transfer lo confirma;
-  ahí empieza la cuenta atrás de la retención.
+  el borrado en el origen nunca se ejecuta antes (ver *Salvaguardas*).
 - Antes de borrar en el origen se envía un **aviso previo** (días configurables)
-  y se comprueba que la copia archivada está realmente ahí. Si no lo está, el
+  y se repiten todas las comprobaciones de seguridad. Si alguna falla, el
   borrado se **retiene** y se informa, en lugar de ejecutarse.
 - Las categorías que llegaron al archivo **sin** la tarea son invisibles para el
   podado a propósito: es lo que protege el contenido ajeno. Adoptar una para que
@@ -108,9 +113,10 @@ en que ocurre.
 
 | Requisito | Versión |
 |---|---|
-| Moodle | 4.5 – 5.1 |
+| Moodle | 4.5, 5.1 o 5.3 |
 | PHP | 8.1+ |
-| Otros plugins | `local_coursetransfer` **2.0.0 o superior en esta plataforma** (la plataforma origen remota solo necesita sus servicios web de backend estables) |
+| Otros plugins | `local_coursetransfer` **2.2.0 o superior en esta plataforma** (la plataforma origen remota solo necesita sus servicios web de backend estables; se recomienda 2.2.0) |
+| Cron | En marcha en **las dos** plataformas |
 
 ## 🚀 Instalación
 
@@ -129,8 +135,10 @@ transferencias de cursos**:
 
 | Ajuste | Efecto |
 |---|---|
-| **Días de aviso antes de borrar en el origen** | Con cuánta antelación se envía el aviso previo cancelable antes de un borrado programado. Por defecto: 7. |
-| **Días de gracia antes de podar el archivo** | Tiempo entre el anuncio de los candidatos al podado y su borrado, para poder excluirlos. Por defecto: 7. |
+| **Días de aviso antes de borrar en el origen** | Con cuánta antelación se envía el aviso previo cancelable antes de un borrado programado. Por defecto: 7, mínimo 1. |
+| **Días de gracia antes de podar el archivo** | Tiempo entre el anuncio de los candidatos al podado y su borrado, para poder excluirlos. Por defecto: 7, mínimo 1. |
+| **Retener el borrado si el origen ha cambiado (R3)** (`holdiforiginchanged`) | Activado por defecto. Ver *Salvaguardas*. |
+| **Aprobar el primer borrado de cada tarea** (`requirefirstdeletionapproval`) | Activado por defecto. Ver *Salvaguardas*. |
 | **Pausar todos los borrados (freno de emergencia)** | Mientras está activo no se ejecuta ningún borrado ni podado y sus fechas se van posponiendo, de modo que quitar la pausa nunca provoca un atasco. Las restauraciones no se ven afectadas. |
 | **Mes de inicio del curso académico** | Se usa para saber qué curso está en marcha cuando se ejecuta una tarea. Antes de ese mes el curso en marcha sigue siendo el anterior: en mayo de 2026 el curso es 2025/26. Por defecto: septiembre. |
 | **Máximo de categorías archivadas por ejecución** | Tope para que un curso atrasado no inunde el origen de restauraciones simultáneas. |
@@ -141,6 +149,40 @@ cantidad de historia.
 
 Los canales de aviso se gestionan con las preferencias de notificación estándar
 de Moodle, por sitio y por usuario.
+
+## 🛡️ Salvaguardas
+
+La tarea habla con el origen **como su creador** (o como quien pulsa «Ejecutar
+ahora»): ese usuario necesita una cuenta equivalente en el origen con las
+capacidades que Course Transfer exige allí. El borrado en el origen se programa
+a los **días de retención** de la tarea desde el lanzamiento, pero nunca se
+ejecuta antes de que Course Transfer dé la restauración por **completada**.
+
+Borrar en el origen es el único paso que elimina contenido que quizá no exista en
+ningún otro sitio. Justo antes de ejecutarlo se hacen estas comprobaciones; si
+alguna falla, el borrado queda **retenido**, se pospone y se avisa, nunca se
+ejecuta en silencio:
+
+| Salvaguarda | Qué comprueba | Ajuste |
+|---|---|---|
+| **R1 — restauración verificada** | Course Transfer ha dado la restauración por completada (no solo lanzada) y verificada: sin módulos ni ficheros que falten y con los cursos restaurados iguales al origen. | Siempre activa |
+| **R2 — archivo intacto** | Todos los cursos de esa restauración siguen en esta plataforma, dentro de la categoría archivada. | Siempre activa |
+| **Identidad utilizable** | El creador de la tarea existe y está activo: nunca se pide nada al origen con otra identidad. | Siempre activa |
+| **R3 — origen sin cambios** | La categoría del origen sigue teniendo los cursos que se archivaron; cursos nuevos o desaparecidos, o un origen que no responde, retienen el borrado. El origen no informa de fechas de modificación, así que solo se compara la lista de cursos. | `holdiforiginchanged` (activado) |
+| **Aprobación del primer borrado** | El primer borrado de cada tarea, y el primero tras cambiar su máscara, años u origen, espera en *Ejecuciones y borrados* a que un gestor lo apruebe. Tras aprobarlo, las salvaguardas se vuelven a comprobar. | `requirefirstdeletionapproval` (activado) |
+| **Aviso previo** | Se envía un aviso cancelable antes del borrado, nunca en la misma pasada del cron. | Días de aviso (≥ 1) |
+| **Freno de emergencia** | Mientras está activo no se ejecuta ningún borrado ni podado y sus fechas se posponen. | Pausar todos los borrados |
+
+El podado del archivo tiene sus propias garantías: solo considera categorías que
+la tarea trajo o adoptó, anuncia los candidatos con un periodo de gracia (se
+pueden excluir) y vuelve a comprobar cada uno antes de borrarlo; el que ya no
+cumple la política queda excluido para siempre. En el origen, Course Transfer
+aplica sus propias protecciones (retención en la papelera, eventos de auditoría).
+
+**Simula** una tarea (botón en su vista de ciclo de vida) para ver qué
+archivaría, qué borrados se ejecutarían, quedarían retenidos o esperarían
+aprobación y qué podaría, sin cambiar nada. Cada borrado, retención, aprobación,
+cancelación y podado queda además como evento en los registros del sitio.
 
 ## 🗑️ Desinstalación
 

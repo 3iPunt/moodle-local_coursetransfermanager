@@ -25,6 +25,9 @@
 namespace local_coursetransfermanager\manager;
 
 use core_course_category;
+use local_coursetransfermanager\event\prune_announced;
+use local_coursetransfermanager\event\prune_excluded;
+use local_coursetransfermanager\event\prune_executed;
 use moodle_exception;
 use stdClass;
 
@@ -33,9 +36,9 @@ use stdClass;
  *
  * Phase 1 (detect): categories older than the retention are ANNOUNCED as
  * candidates with a grace period, never deleted on the spot. Only categories
- * the manager itself created (tracked via destinationcategoryid on the
- * executions) are ever considered, and the year is extracted strictly — a
- * code like MED1042 is not a year.
+ * each task manages (brought by its executions or explicitly adopted) are
+ * ever considered, and the year is extracted strictly — a code like MED1042
+ * is not a year.
  *
  * Phase 2 (execute): once the grace period ends, candidates still announced
  * (not excluded by an admin) are deleted.
@@ -58,23 +61,14 @@ final class prune_manager {
      * Phase 1: announce new pruning candidates with a grace period.
      *
      * @param int $now Current timestamp.
-     * @param int $gracedays Days between the announcement and the deletion.
+     * @param int $gracedays Days between the announcement and the deletion (at least one).
      * @return stdClass[] Newly announced candidate rows (for notification).
      */
     public static function detect(int $now, int $gracedays): array {
         global $DB;
 
-        // Only categories the manager created are ever pruning candidates: never
-        // touch content that reached this platform some other way.
-        $managed = $DB->get_fieldset_select(
-            'local_coursetransfermanager_executions',
-            'DISTINCT destinationcategoryid',
-            'destinationcategoryid IS NOT NULL'
-        );
-        if (empty($managed)) {
-            return [];
-        }
-        $managed = array_map('intval', $managed);
+        // Never zero: announcing and deleting in the same pass would void the notice.
+        $gracedays = max(1, $gracedays);
 
         $tasks = $DB->get_records_select(
             'local_coursetransfermanager_tasks',
@@ -84,36 +78,13 @@ final class prune_manager {
         $announced = [];
 
         foreach ($tasks as $task) {
-            // The conservation policy decides: prune academic year <= A - P - V.
-            $mask = rotation::mask($task);
-            if (!$mask) {
-                continue;
-            }
-
-            try {
-                $parent = core_course_category::get((int) $task->targetcategoryid, IGNORE_MISSING, true);
-            } catch (\Throwable $e) {
-                $parent = null;
-            }
-            if (!$parent) {
-                continue;
-            }
-
-            $cutoff = rotation::prune_threshold($task, $now);
-
-            foreach ($parent->get_children() as $child) {
-                if (!in_array((int) $child->id, $managed, true)) {
-                    continue;
-                }
-                $year = $mask->year_of((string) $child->idnumber);
-                if ($year === null || $year > $cutoff) {
-                    continue;
-                }
+            // Each task only announces what IT manages (brought or adopted), under its own destination.
+            foreach (rotation::to_prune($task, $now) as $category) {
                 // Never re-announce a live candidate nor one an admin excluded.
                 $exists = $DB->record_exists_select(
                     'local_coursetransfermanager_prune',
                     'categoryid = ? AND status IN (?, ?)',
-                    [(int) $child->id, self::STATUS_ANNOUNCED, self::STATUS_EXCLUDED]
+                    [(int) $category->id, self::STATUS_ANNOUNCED, self::STATUS_EXCLUDED]
                 );
                 if ($exists) {
                     continue;
@@ -121,8 +92,8 @@ final class prune_manager {
 
                 $candidate = (object) [
                     'taskid' => (int) $task->id,
-                    'categoryid' => (int) $child->id,
-                    'categoryname' => $child->get_formatted_name(),
+                    'categoryid' => (int) $category->id,
+                    'categoryname' => format_string((string) $category->name),
                     'announcedat' => $now,
                     'graceuntil' => $now + ($gracedays * DAYSECS),
                     'status' => self::STATUS_ANNOUNCED,
@@ -130,6 +101,7 @@ final class prune_manager {
                     'timemodified' => $now,
                 ];
                 $candidate->id = $DB->insert_record('local_coursetransfermanager_prune', $candidate);
+                prune_announced::log((int) $candidate->id, $candidate->categoryname, 'policy');
                 mtrace('Pruning candidate announced: category id=' . $candidate->categoryid
                     . ' "' . $candidate->categoryname . '" (grace until ' . userdate($candidate->graceuntil) . ')');
                 $announced[] = $candidate;
@@ -142,8 +114,11 @@ final class prune_manager {
     /**
      * Phase 2: prune announced candidates whose grace period ended.
      *
+     * Each candidate is checked again right before deleting: the policy may have
+     * changed during the grace period (see {@see rotation::is_prunable()}).
+     *
      * @param int $now Current timestamp.
-     * @return stdClass[] Results: {candidate, outcome: done|missing|retry, detail}.
+     * @return stdClass[] Results: {candidate, outcome: done|missing|invalid|retry, detail}.
      */
     public static function execute_due(int $now): array {
         global $DB;
@@ -167,10 +142,23 @@ final class prune_manager {
                 $results[] = (object) ['candidate' => $candidate, 'outcome' => 'missing', 'detail' => ''];
                 continue;
             }
+
+            // Not prunable anymore: excluded for good, since only a human should bring it back.
+            $task = $DB->get_record('local_coursetransfermanager_tasks', ['id' => $candidate->taskid]);
+            if (!$task || !rotation::is_prunable($task, (int) $category->id, $now)) {
+                self::mark($candidate->id, self::STATUS_EXCLUDED);
+                $detail = get_string('prune_invalid', 'local_coursetransfermanager', (string) $candidate->categoryname);
+                mtrace('Pruning skipped for category id=' . $category->id . ': no longer meets the policy.');
+                prune_excluded::log((int) $candidate->id, (string) $candidate->categoryname, 'revalidation', null, $detail);
+                $results[] = (object) ['candidate' => $candidate, 'outcome' => 'invalid', 'detail' => $detail];
+                continue;
+            }
+
             try {
                 mtrace('Pruning archived category id=' . $category->id . ' "' . $candidate->categoryname . '"');
                 $category->delete_full(false);
                 self::mark($candidate->id, self::STATUS_DONE);
+                prune_executed::log((int) $candidate->id, (string) $candidate->categoryname, 'policy+revalidation');
                 $results[] = (object) ['candidate' => $candidate, 'outcome' => self::STATUS_DONE, 'detail' => ''];
             } catch (\Throwable $e) {
                 // Leave it announced so the next tick retries.
@@ -221,17 +209,26 @@ final class prune_manager {
     public static function exclude(int $pruneid, int $userid): stdClass {
         global $DB;
 
-        $candidate = $DB->get_record('local_coursetransfermanager_prune', ['id' => $pruneid], '*', MUST_EXIST);
-        if ($candidate->status !== self::STATUS_ANNOUNCED) {
+        $current = $DB->get_record('local_coursetransfermanager_prune', ['id' => $pruneid], 'status', MUST_EXIST);
+        if ($current->status !== self::STATUS_ANNOUNCED) {
             throw new moodle_exception('prunenotexcludable', 'local_coursetransfermanager');
         }
 
-        $candidate->status = self::STATUS_EXCLUDED;
-        $candidate->excludedby = $userid;
-        $candidate->excludedat = time();
-        $candidate->timemodified = time();
-        $DB->update_record('local_coursetransfermanager_prune', $candidate);
+        // Conditional update: the cron may be closing the same candidate right now.
+        $now = time();
+        $DB->execute(
+            "UPDATE {local_coursetransfermanager_prune}
+                SET status = :excluded, excludedby = :userid, excludedat = :now1, timemodified = :now2
+              WHERE id = :id AND status = :announced",
+            ['excluded' => self::STATUS_EXCLUDED, 'userid' => $userid, 'now1' => $now, 'now2' => $now,
+                'id' => $pruneid, 'announced' => self::STATUS_ANNOUNCED]
+        );
 
+        $candidate = $DB->get_record('local_coursetransfermanager_prune', ['id' => $pruneid], '*', MUST_EXIST);
+        if ($candidate->status !== self::STATUS_EXCLUDED || (int) $candidate->excludedby !== $userid) {
+            throw new moodle_exception('prunenotexcludable', 'local_coursetransfermanager');
+        }
+        prune_excluded::log($pruneid, (string) $candidate->categoryname, 'manual');
         return $candidate;
     }
 
@@ -269,10 +266,11 @@ final class prune_manager {
      */
     private static function mark(int $pruneid, string $status): void {
         global $DB;
-        $DB->update_record('local_coursetransfermanager_prune', (object) [
-            'id' => $pruneid,
-            'status' => $status,
-            'timemodified' => time(),
-        ]);
+        // Only from announced: never overwrite an exclusion made in the meantime.
+        $DB->execute(
+            "UPDATE {local_coursetransfermanager_prune} SET status = :status, timemodified = :now
+              WHERE id = :id AND status = :announced",
+            ['status' => $status, 'now' => time(), 'id' => $pruneid, 'announced' => self::STATUS_ANNOUNCED]
+        );
     }
 }

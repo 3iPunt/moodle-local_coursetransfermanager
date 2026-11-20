@@ -123,6 +123,22 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'local/coursetransfermanager:managetasks',
     ],
+    'local_coursetransfermanager_deletion_approve' => [
+        'classname' => task_external::class,
+        'methodname' => 'deletion_approve',
+        'description' => 'Approve a verified origin deletion held for the first-deletion approval.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'local/coursetransfermanager:managetasks',
+    ],
+    'local_coursetransfermanager_task_simulate' => [
+        'classname' => task_external::class,
+        'methodname' => 'task_simulate',
+        'description' => 'Dry run of a task: what it would archive, delete from the origin and prune. Writes nothing.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'local/coursetransfermanager:managetasks',
+    ],
 ];
 
 $services = [];

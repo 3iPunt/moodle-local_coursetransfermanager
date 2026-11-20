@@ -126,10 +126,12 @@ final class executions {
                 $where[] = "e.deletestatus = 'cancelled'";
                 break;
             case 'completed':
-                $where[] = "e.status = 'completed' AND (e.deletestatus IS NULL OR e.deletestatus IN ('scheduled', 'warned'))";
+                $where[] = "e.status = 'completed'"
+                    . " AND (e.deletestatus IS NULL OR e.deletestatus IN ('scheduled', 'warned', 'running'))";
                 break;
             case 'success':
-                $where[] = "e.status = 'success' AND (e.deletestatus IS NULL OR e.deletestatus IN ('scheduled', 'warned'))";
+                $where[] = "e.status = 'success'"
+                    . " AND (e.deletestatus IS NULL OR e.deletestatus IN ('scheduled', 'warned', 'running'))";
                 break;
         }
 

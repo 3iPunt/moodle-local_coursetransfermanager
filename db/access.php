@@ -27,6 +27,8 @@ defined('MOODLE_INTERNAL') || die();
 
 $capabilities = [
     'local/coursetransfermanager:managetasks' => [
+        // Deletes content in two platforms, changes the rotation policy and lists users.
+        'riskbitmask' => RISK_DATALOSS | RISK_CONFIG | RISK_PERSONAL,
         'captype' => 'write',
         'contextlevel' => CONTEXT_SYSTEM,
         'archetypes' => [

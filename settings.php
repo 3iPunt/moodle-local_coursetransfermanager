@@ -44,7 +44,7 @@ if ($hassiteconfig) {
         get_string('setting_deletionwarningdays', 'local_coursetransfermanager'),
         get_string('setting_deletionwarningdays_desc', 'local_coursetransfermanager'),
         7,
-        PARAM_INT
+        \local_coursetransfermanager\manager\lifecycle_config::DAYS_REGEX
     ));
 
     $settings->add(new admin_setting_configtext(
@@ -52,7 +52,7 @@ if ($hassiteconfig) {
         get_string('setting_prunegracedays', 'local_coursetransfermanager'),
         get_string('setting_prunegracedays_desc', 'local_coursetransfermanager'),
         7,
-        PARAM_INT
+        \local_coursetransfermanager\manager\lifecycle_config::DAYS_REGEX
     ));
 
     // The academic year, not the natural one, drives the conservation policy.
@@ -74,6 +74,21 @@ if ($hassiteconfig) {
         get_string('setting_maxarchivepertick_desc', 'local_coursetransfermanager'),
         3,
         PARAM_INT
+    ));
+
+    // Safeguards against losing a course: on by default, an admin may turn them off.
+    $settings->add(new admin_setting_configcheckbox(
+        'local_coursetransfermanager/holdiforiginchanged',
+        get_string('setting_holdiforiginchanged', 'local_coursetransfermanager'),
+        get_string('setting_holdiforiginchanged_desc', 'local_coursetransfermanager'),
+        1
+    ));
+
+    $settings->add(new admin_setting_configcheckbox(
+        'local_coursetransfermanager/requirefirstdeletionapproval',
+        get_string('setting_requirefirstdeletionapproval', 'local_coursetransfermanager'),
+        get_string('setting_requirefirstdeletionapproval_desc', 'local_coursetransfermanager'),
+        1
     ));
 
     $settings->add(new admin_setting_configcheckbox(

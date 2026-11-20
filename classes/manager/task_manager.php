@@ -27,8 +27,10 @@ namespace local_coursetransfermanager\manager;
 
 
 use coding_exception;
+use core\lock\lock;
+use core\lock\lock_config;
 use core_course_category;
-use curl;
+use core_user;
 use dml_exception;
 use dml_missing_record_exception;
 use local_coursetransfer\api\request;
@@ -62,8 +64,26 @@ class task_manager {
     /** @var string Every course restored for real (set by the request_completed observer). */
     public const STATUS_COMPLETED = 'completed';
 
-    /** @var int Default days of grace between announcing a pruning and running it. */
-    public const DEFAULT_PRUNE_GRACE_DAYS = 7;
+    /** @var string Error code: the origin could not be verified or listed (retried). */
+    public const ERROR_ORIGIN = 'origin_unreachable';
+
+    /** @var string Error code: the task creator cannot act in the origin anymore. */
+    public const ERROR_CREATOR = 'creator_unavailable';
+
+    /** @var string Error code: the restoration of one category failed. */
+    public const ERROR_RESTORE = 'restore_failed';
+
+    /** @var string Warning code: restored, but the created category could not be identified. */
+    public const WARNING_RELOCATION = 'relocation_unresolved';
+
+    /** @var int Retries per cycle when the origin cannot be read (one per hour). */
+    public const ORIGIN_MAX_RETRIES = 3;
+
+    /** @var int Failed attempts per origin category and cycle before giving up until the next one. */
+    public const CATEGORY_MAX_ATTEMPTS = 3;
+
+    /** @var int Wait before a retry or before continuing what the per-run cap left pending. */
+    public const RETRY_DELAY = HOURSECS;
 
     /**
      * Status options usable for filtering executions.
@@ -89,21 +109,6 @@ class task_manager {
      */
     public static function get_status_label(string $status): string {
         return self::get_status_options()[$status] ?? $status;
-    }
-
-    /**
-     * CSS class for the status badge.
-     *
-     * @param string $status
-     * @return string
-     */
-    public static function get_status_class(string $status): string {
-        return match ($status) {
-            self::STATUS_ERROR => 'badge rounded-pill bg-danger px-3 py-2',
-            self::STATUS_SUCCESS => 'badge rounded-pill bg-info px-3 py-2',
-            self::STATUS_COMPLETED => 'badge rounded-pill bg-success px-3 py-2',
-            default => 'badge rounded-pill bg-secondary px-3 py-2',
-        };
     }
 
     /**
@@ -133,6 +138,8 @@ class task_manager {
             $params['todate'] = (int)$filters['todate'];
         }
 
+        // Latest execution by id, not timecreated: one run launches several categories in the same
+        // second, and a task must come back as a single row.
         $sql = "SELECT t.*, latest.status AS laststatus, latest.timecreated AS lastrun,
                        latest.manualrun AS lastmanual, latest.errormessage AS lasterror
                   FROM {local_coursetransfermanager_tasks} t
@@ -140,10 +147,10 @@ class task_manager {
                     SELECT e.taskid, e.status, e.timecreated, e.manualrun, e.errormessage
                       FROM {local_coursetransfermanager_executions} e
                       JOIN (
-                            SELECT taskid, MAX(timecreated) AS maxt
+                            SELECT taskid, MAX(id) AS maxid
                               FROM {local_coursetransfermanager_executions}
                           GROUP BY taskid
-                      ) m ON m.taskid = e.taskid AND m.maxt = e.timecreated
+                      ) m ON m.taskid = e.taskid AND m.maxid = e.id
              ) latest ON latest.taskid = t.id
                  WHERE " . implode(' AND ', $where) . "
               ORDER BY t.timemodified DESC";
@@ -203,6 +210,7 @@ class task_manager {
             'targetcategoryid' => (int)$data['targetcategoryid'],
             'cronexpression' => $cronexpression,
             'retentiondays' => (int)($data['retentiondays'] ?? 30),
+            'originkeepyears' => (int)($data['originkeepyears'] ?? 2),
             'destinationkeepyears' => (int)($data['destinationkeepyears'] ?? 4),
             'restoreuserdata' => !empty($data['restoreuserdata']) ? 1 : 0,
             'enabled' => !empty($data['enabled']) ? 1 : 0,
@@ -227,7 +235,7 @@ class task_manager {
      * @throws dml_exception
      */
     public function update_task(int $id, array $data): bool {
-        global $DB;
+        global $DB, $USER;
 
         $record = $DB->get_record('local_coursetransfermanager_tasks', ['id' => $id], '*', MUST_EXIST);
         $cronexpression = trim($data['cronexpression'] ?? $record->cronexpression);
@@ -249,6 +257,10 @@ class task_manager {
             ? $data['notifyrecipients'] : $record->notifyrecipients;
         $record->nextruntime = schedule::next($cronexpression, time());
         $record->timemodified = time();
+        // The task acts in the origin as its creator: whoever saves an orphan task takes it over.
+        if (!self::task_user($record) && !empty($USER->id)) {
+            $record->usercreated = (int)$USER->id;
+        }
 
         return $DB->update_record('local_coursetransfermanager_tasks', $record);
     }
@@ -277,6 +289,8 @@ class task_manager {
         global $DB;
         $DB->delete_records('local_coursetransfermanager_executions', ['taskid' => $id]);
         $DB->delete_records('local_coursetransfermanager_prune', ['taskid' => $id]);
+        $DB->delete_records('local_coursetransfermanager_adopted', ['taskid' => $id]);
+        unset_config(deletion_manager::approval_key($id), 'local_coursetransfermanager');
         return $DB->delete_records('local_coursetransfermanager_tasks', ['id' => $id]);
     }
 
@@ -303,29 +317,17 @@ class task_manager {
     }
 
     /**
-     * Compute the next scheduled run time from a 5-field cron expression.
+     * Identity a task presents to the origin: its creator, while that user can still act.
      *
-     * Kept for backwards compatibility with the legacy form; delegates to {@see schedule}.
-     *
-     * @param string $cronexpression A 5-field cron expression.
-     * @param int $from Reference timestamp; the next run will be strictly after this point.
-     * @return int|null Unix timestamp of the next run, or null if it cannot be computed.
+     * @param object $task Task (or row) with usercreated.
+     * @return stdClass|null Null when the creator was deleted or suspended.
      */
-    public static function compute_next_run(string $cronexpression, int $from): ?int {
-        return schedule::next($cronexpression, $from);
-    }
-
-    /**
-     * Best-effort previous-run anchor for the current cycle.
-     *
-     * Kept for backwards compatibility; delegates to {@see schedule}.
-     *
-     * @param string $cronexpression
-     * @param int $reference Timestamp used as the upper bound.
-     * @return int|null
-     */
-    public static function compute_previous_run(string $cronexpression, int $reference): ?int {
-        return schedule::previous($cronexpression, $reference);
+    public static function task_user(object $task): ?stdClass {
+        $user = empty($task->usercreated) ? false : core_user::get_user((int)$task->usercreated);
+        if (!$user || !empty($user->deleted) || !empty($user->suspended)) {
+            return null;
+        }
+        return $user;
     }
 
     /**
@@ -338,29 +340,143 @@ class task_manager {
         global $DB;
 
         $now = time();
+        $this->schedule_missing($now);
+
         $tasks = $DB->get_records_select(
             'local_coursetransfermanager_tasks',
-            'enabled = 1 AND (nextruntime IS NULL OR nextruntime <= :now)',
+            'enabled = 1 AND nextruntime IS NOT NULL AND nextruntime <= :now',
             ['now' => $now]
         );
 
         foreach ($tasks as $task) {
+            $lock = $this->lock_task((int)$task->id);
+            if (!$lock) {
+                mtrace('Skipping task "' . $task->name . '": another process is running it.');
+                continue;
+            }
             try {
-                if ($this->has_recent_success($task, $now)) {
-                    mtrace('Skipping task "' . $task->name . '" — already executed in current cycle.');
-                    $this->advance_schedule($task, $now);
+                // Re-read under the lock: a manual run may have just moved it on.
+                $task = $DB->get_record('local_coursetransfermanager_tasks', ['id' => $task->id]);
+                if (!$task || empty($task->enabled) || (int)$task->nextruntime > $now) {
                     continue;
                 }
-                $this->process_task($task);
-                $this->advance_schedule($task, $now);
-            } catch (Throwable $e) {
-                $this->create_execution($task->id, self::STATUS_ERROR, ['error' => $e->getMessage()]);
-                notifier::execution_error($task, $e->getMessage());
-                mtrace('Task failed: ' . $e->getMessage());
-                // Move the schedule forward so we do not retry every cron tick.
-                $this->advance_schedule($task, $now);
+                $this->run_scheduled($task, $now);
+            } finally {
+                $lock->release();
             }
         }
+    }
+
+    /**
+     * One scheduled run of a task, holding its lock.
+     *
+     * @param object $task Task record.
+     * @param int $now Current timestamp.
+     * @return void
+     * @throws dml_exception
+     */
+    private function run_scheduled(object $task, int $now): void {
+        $user = self::task_user($task);
+        if (!$user) {
+            $error = get_string('creatorunavailable', 'local_coursetransfermanager', (int)$task->usercreated);
+            $this->create_execution($task->id, self::STATUS_ERROR, ['error' => $error, 'errorcode' => self::ERROR_CREATOR]);
+            notifier::execution_error($task, $error);
+            mtrace('Task failed: ' . $error);
+            $this->advance_schedule($task, $now);
+            return;
+        }
+
+        try {
+            $summary = $this->process_task($task, $user);
+            // What the per-run cap (or a failed category) left pending continues soon, not next cycle.
+            $this->advance_schedule($task, $now, $summary->remaining > 0 ? $now + self::RETRY_DELAY : null);
+        } catch (Throwable $e) {
+            $origin = $e instanceof moodle_exception && in_array($e->errorcode, ['originsyncfailed', 'originunreadable'], true);
+            $error = $e->getMessage();
+            $this->create_execution($task->id, self::STATUS_ERROR, [
+                'error' => $error,
+                'errorcode' => $origin ? self::ERROR_ORIGIN : null,
+            ]);
+            // An origin that does not answer is usually transient: retry a few times within the cycle.
+            $retryat = ($origin && $this->origin_failures($task, $now) <= self::ORIGIN_MAX_RETRIES)
+                ? $now + self::RETRY_DELAY : null;
+            if ($retryat) {
+                $error .= ' ' . get_string('retry_at', 'local_coursetransfermanager', userdate($retryat));
+            }
+            notifier::execution_error($task, $error);
+            mtrace('Task failed: ' . $error);
+            $this->advance_schedule($task, $now, $retryat);
+        }
+    }
+
+    /**
+     * Give a schedule to enabled tasks that lost it, without running them.
+     *
+     * A missing nextruntime used to mean "due now" (a cron that never fires ran every tick):
+     * now it is recomputed, and a task whose expression never fires waits for an edit.
+     *
+     * @param int $now Current timestamp.
+     * @return void
+     * @throws dml_exception
+     */
+    private function schedule_missing(int $now): void {
+        global $DB;
+
+        $tasks = $DB->get_records_select(
+            'local_coursetransfermanager_tasks',
+            'enabled = 1 AND nextruntime IS NULL',
+            [],
+            '',
+            'id, name, cronexpression'
+        );
+        foreach ($tasks as $task) {
+            $next = schedule::next((string)$task->cronexpression, $now);
+            if ($next === null) {
+                mtrace('Task "' . $task->name . '" has a schedule that never fires: edit it.');
+                continue;
+            }
+            $DB->set_field('local_coursetransfermanager_tasks', 'nextruntime', $next, ['id' => $task->id]);
+        }
+    }
+
+    /**
+     * Origin failures of the scheduled runs in the current cycle.
+     *
+     * @param object $task Task record.
+     * @param int $now Current timestamp.
+     * @return int
+     * @throws dml_exception
+     */
+    private function origin_failures(object $task, int $now): int {
+        global $DB;
+        return $DB->count_records_select(
+            'local_coursetransfermanager_executions',
+            'taskid = :taskid AND status = :status AND errorcode = :code AND manualrun = 0 AND timecreated >= :since',
+            ['taskid' => $task->id, 'status' => self::STATUS_ERROR, 'code' => self::ERROR_ORIGIN,
+                'since' => $this->cycle_start($task, $now)]
+        );
+    }
+
+    /**
+     * Start of the task's current cycle: its most recent scheduled fire.
+     *
+     * @param object $task Task record.
+     * @param int $now Current timestamp.
+     * @return int
+     */
+    private function cycle_start(object $task, int $now): int {
+        return schedule::previous((string)$task->cronexpression, $now + 60) ?? 0;
+    }
+
+    /**
+     * Try to take the per-task lock shared by the cron and "run now".
+     *
+     * @param int $taskid Task id.
+     * @return lock|null Null when another process holds it.
+     */
+    private function lock_task(int $taskid): ?lock {
+        $factory = lock_config::get_lock_factory('local_coursetransfermanager');
+        return $factory->get_lock('task_' . $taskid, 0) ?: null;
     }
 
     /**
@@ -371,46 +487,88 @@ class task_manager {
      * @throws dml_exception
      */
     public function run_now_precheck(object $task): stdClass {
-        if ($this->has_recent_success($task, time())) {
+        global $USER;
+        if ($this->is_blocked($task, $USER)) {
             return (object)['blocked' => true, 'lastsuccess' => $this->get_last_success_time($task)];
         }
         return (object)['blocked' => false, 'lastsuccess' => null];
     }
 
     /**
-     * Launch a task right now, outside its schedule.
+     * Launch a task right now, outside its schedule, as the current user.
      *
-     * Guarded against duplicates: relaunching within the current cycle would
-     * duplicate every course in the archive (coursetransfer always creates
-     * new courses), so a recent success blocks the launch.
+     * Already archived categories are never brought twice; what is still pending
+     * in this cycle can always be launched.
      *
      * @param int $taskid Task ID.
-     * @return stdClass {launched: bool, blocked: bool, lastsuccess: ?int, error: ?string}
+     * @return stdClass {launched, blocked, busy, lastsuccess, error, succeeded, failed}
      * @throws dml_exception
      */
     public function run_now(int $taskid): stdClass {
-        $task = $this->get_task($taskid);
-        $now = time();
+        global $USER;
 
-        if ($this->has_recent_success($task, $now)) {
-            return (object)[
-                'launched' => false,
-                'blocked' => true,
-                'lastsuccess' => $this->get_last_success_time($task),
-                'error' => null,
-            ];
+        $task = $this->get_task($taskid);
+        $result = (object)['launched' => false, 'blocked' => false, 'busy' => false, 'lastsuccess' => null,
+            'error' => null, 'succeeded' => 0, 'failed' => 0];
+
+        $lock = $this->lock_task((int)$task->id);
+        if (!$lock) {
+            $result->busy = true;
+            $result->error = get_string('runnow_busy', 'local_coursetransfermanager');
+            return $result;
         }
 
         try {
-            $this->process_task($task, true);
-            return (object)['launched' => true, 'blocked' => false, 'lastsuccess' => null, 'error' => null];
+            if ($this->is_blocked($task, $USER)) {
+                $result->blocked = true;
+                $result->lastsuccess = $this->get_last_success_time($task);
+                return $result;
+            }
+
+            $summary = $this->process_task($task, $USER, true);
+            $result->succeeded = $summary->succeeded;
+            $result->failed = $summary->failed;
+            $result->launched = $summary->succeeded > 0;
+            if (!$result->launched) {
+                $result->error = $summary->failed > 0
+                    ? get_string('runnow_allfailed', 'local_coursetransfermanager', $summary->failed)
+                    : get_string('runnow_nothing', 'local_coursetransfermanager');
+            }
+            return $result;
         } catch (Throwable $e) {
+            $origin = $e instanceof moodle_exception && in_array($e->errorcode, ['originsyncfailed', 'originunreadable'], true);
             $this->create_execution($task->id, self::STATUS_ERROR, [
                 'error' => $e->getMessage(),
+                'errorcode' => $origin ? self::ERROR_ORIGIN : null,
                 'manualrun' => 1,
             ]);
             notifier::execution_error($task, $e->getMessage());
-            return (object)['launched' => false, 'blocked' => false, 'lastsuccess' => null, 'error' => $e->getMessage()];
+            $result->error = $e->getMessage();
+            return $result;
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * Whether a manual launch has nothing left to do in this cycle.
+     *
+     * Only after a success in the cycle, and then only if nothing is pending. When the
+     * origin cannot be read it stays blocked, as before: no proof that anything is left.
+     *
+     * @param object $task Task record.
+     * @param stdClass $user Identity presented to the origin.
+     * @return bool
+     * @throws dml_exception
+     */
+    private function is_blocked(object $task, stdClass $user): bool {
+        if (!$this->has_recent_success($task, time())) {
+            return false;
+        }
+        try {
+            return empty(rotation::to_archive($task, null, $user));
+        } catch (Throwable $e) {
+            return true;
         }
     }
 
@@ -418,9 +576,6 @@ class task_manager {
      * Returns true if a successful execution already exists for the current cycle.
      *
      * The "current cycle" starts at the most recent cron-scheduled fire at or before $now.
-     * If a success row was recorded after that anchor, the task is considered already done
-     * for this period — protecting against double-runs when an admin re-launches the cron
-     * or when nextruntime has slipped.
      *
      * @param object $task
      * @param int $now
@@ -473,15 +628,16 @@ class task_manager {
      *
      * @param object $task
      * @param int $now
+     * @param int|null $nextrun Explicit next run (retry or continuation); the schedule's when null.
      * @return void
      * @throws dml_exception
      */
-    private function advance_schedule(object $task, int $now): void {
+    private function advance_schedule(object $task, int $now, ?int $nextrun = null): void {
         global $DB;
         $DB->update_record('local_coursetransfermanager_tasks', (object)[
             'id' => $task->id,
             'lastruntime' => $now,
-            'nextruntime' => schedule::next($task->cronexpression, $now),
+            'nextruntime' => $nextrun ?? schedule::next($task->cronexpression, $now),
             'timemodified' => $now,
         ]);
     }
@@ -489,55 +645,115 @@ class task_manager {
     /**
      * Archive whatever the task has to archive on this run.
      *
-     * In rotation mode the conservation policy decides: every category of the
-     * origin that has outstayed its years in production is archived, oldest
-     * first and capped per execution so a catch-up does not saturate both
-     * platforms. In legacy mode (tasks created before 2.1) the single-year
-     * pattern is resolved as before.
+     * Every origin category that has outstayed its years in production is archived,
+     * oldest first and capped per execution so a catch-up does not saturate both platforms.
      *
      * @param object $task
+     * @param stdClass $user Identity presented to the origin (creator, or who pressed "run now").
      * @param bool $manualrun True when launched via "run now".
-     * @return void
+     * @return stdClass {succeeded, failed, remaining}: remaining = what this cycle still has to retry.
      * @throws moodle_exception
      * @throws dml_exception
      */
-    private function process_task(object $task, bool $manualrun = false): void {
+    private function process_task(object $task, stdClass $user, bool $manualrun = false): stdClass {
         mtrace('Processing task: ' . $task->name . ($manualrun ? ' (manual run)' : ''));
+        $summary = (object)['succeeded' => 0, 'failed' => 0, 'remaining' => 0];
 
         $site = origin::site((int)$task->originsiteid);
-        $this->verify_origin_sync($site);
+        $this->verify_origin_sync($site, $user);
 
         if (!rotation::mask($task)) {
             throw new moodle_exception('maskinvalid', 'local_coursetransfermanager');
         }
 
-        $pending = rotation::to_archive($task);
+        $pending = rotation::to_archive($task, null, $user);
         if (empty($pending)) {
             mtrace('Nothing to archive: no category in the origin has outstayed its '
                 . (int)$task->originkeepyears . ' year(s) in production.');
-            return;
+            return $summary;
         }
 
-        $max = rotation::max_per_tick();
-        $batch = array_slice($pending, 0, $max);
+        // A category that keeps failing waits for the next cycle; a human pressing "run now" may insist.
+        $attempts = $this->failed_attempts($task);
+        $eligible = $manualrun ? $pending : array_values(array_filter(
+            $pending,
+            fn(stdClass $category): bool => ($attempts[(int)$category->id] ?? 0) < self::CATEGORY_MAX_ATTEMPTS
+        ));
+        if (count($eligible) < count($pending)) {
+            mtrace((count($pending) - count($eligible)) . ' category(ies) failed '
+                . self::CATEGORY_MAX_ATTEMPTS . ' times in this cycle: left for the next one.');
+        }
+
+        $batch = array_slice($eligible, 0, rotation::max_per_tick());
         mtrace('Policy: archive year <= ' . rotation::archive_threshold($task) . '. '
             . count($pending) . ' pending, processing ' . count($batch) . ' this run.');
 
+        $summary->remaining = count($eligible) - count($batch);
         foreach ($batch as $category) {
-            $this->archive_category(
+            $archived = $this->archive_category(
                 $task,
                 $site,
+                $user,
                 (int)$category->id,
                 (string)$category->name,
                 (string)$category->idnumber,
                 $manualrun
             );
+            if ($archived) {
+                $summary->succeeded++;
+            } else {
+                $summary->failed++;
+                if (($attempts[(int)$category->id] ?? 0) + 1 < self::CATEGORY_MAX_ATTEMPTS) {
+                    $summary->remaining++;
+                }
+            }
         }
 
-        if (count($pending) > count($batch)) {
-            mtrace('Remaining ' . (count($pending) - count($batch))
-                . ' category(ies) will be archived on the next run.');
+        if ($summary->remaining > 0) {
+            mtrace('Remaining ' . $summary->remaining . ' category(ies) will be retried in this cycle.');
         }
+        return $summary;
+    }
+
+    /**
+     * Failed scheduled attempts per origin category in the current cycle.
+     *
+     * @param object $task Task record.
+     * @return int[] Origin category id => failures.
+     * @throws dml_exception
+     */
+    private function failed_attempts(object $task): array {
+        global $DB;
+        return array_map('intval', $DB->get_records_sql_menu(
+            "SELECT origincategoryid, COUNT(1)
+               FROM {local_coursetransfermanager_executions}
+              WHERE taskid = :taskid AND status = :status AND manualrun = 0
+                AND origincategoryid IS NOT NULL AND timecreated >= :since
+           GROUP BY origincategoryid",
+            ['taskid' => $task->id, 'status' => self::STATUS_ERROR, 'since' => $this->cycle_start($task, time())]
+        ));
+    }
+
+    /**
+     * How every category restore is requested to local_coursetransfer.
+     *
+     * New courses in the destination, nothing removed in the origin by the restore itself
+     * (the deletion is a separate, verified step) and a safety copy of every course kept
+     * in the destination until that deletion and its retention are over.
+     *
+     * @param object $task Task record (restoreuserdata).
+     * @return configuration_category
+     */
+    public static function restore_configuration(object $task): configuration_category {
+        return new configuration_category(
+            1,
+            false,
+            false,
+            !empty($task->restoreuserdata),
+            false,
+            null,
+            true
+        );
     }
 
     /**
@@ -545,60 +761,60 @@ class task_manager {
      *
      * @param object $task Task record.
      * @param stdClass $site Origin site.
+     * @param stdClass $user Identity presented to the origin.
      * @param int $origincategoryid Category id in the origin.
      * @param string $origincategoryname Category name in the origin.
      * @param string $origincategoryidnumber Category idnumber in the origin.
      * @param bool $manualrun True when launched via "run now".
-     * @return void
+     * @return bool True when the restoration was launched.
      * @throws dml_exception
      */
     private function archive_category(
         object $task,
         stdClass $site,
+        stdClass $user,
         int $origincategoryid,
         string $origincategoryname,
         string $origincategoryidnumber,
         bool $manualrun
-    ): void {
-        global $USER;
-
+    ): bool {
         mtrace('Archiving origin category ID ' . $origincategoryid
             . ' (' . $origincategoryidnumber . ')');
 
-        $configuration = new configuration_category(
-            1,
-            0,
-            0,
-            $task->restoreuserdata ? 1 : 0
-        );
+        $configuration = self::restore_configuration($task);
 
         $result = coursetransfer::restore_category(
-            $USER,
+            $user,
             $site,
             0,
             $origincategoryid,
             $configuration
         );
 
-        mtrace('Restore response: ' . json_encode($result));
+        $requestid = (int)($result['data']['requestid'] ?? 0);
+        mtrace('Restore ' . (empty($result['success']) ? 'failed' : 'launched') . '. Request ID: ' . $requestid);
+
+        $origin = [
+            'origincategoryid' => $origincategoryid,
+            'origincategoryname' => $origincategoryname,
+            'origincategoryidnumber' => $origincategoryidnumber,
+            'manualrun' => $manualrun ? 1 : 0,
+        ];
 
         if (empty($result['success'])) {
             $error = 'Restoration failed (' . origin::format_errors($result['errors'] ?? []) . ')';
-
-            $this->create_execution($task->id, self::STATUS_ERROR, [
-                'origincategoryid' => $origincategoryid,
-                'origincategoryname' => $origincategoryname,
-                'origincategoryidnumber' => $origincategoryidnumber,
+            // Half a restore leaves courses here: keep the trail so nobody hunts for orphans.
+            $this->create_execution($task->id, self::STATUS_ERROR, $origin + [
+                'requestid' => $requestid ?: null,
+                'destinationcategoryid' => $this->resolve_created_category($requestid, $origincategoryidnumber),
                 'error' => $error,
-                'manualrun' => $manualrun ? 1 : 0,
+                'errorcode' => self::ERROR_RESTORE,
             ]);
             notifier::execution_error($task, $error);
 
             mtrace('Task failed: ' . $error);
-            return;
+            return false;
         }
-
-        $requestid = (int)($result['data']['requestid'] ?? 0);
 
         $destinationcategoryid = $this->relocate_restored_category(
             $requestid,
@@ -606,63 +822,38 @@ class task_manager {
             (int)$task->targetcategoryid
         );
 
-        $scheduleddeleteat = time() + ((int)$task->retentiondays * DAYSECS);
-
-        $this->create_execution($task->id, self::STATUS_SUCCESS, [
+        $this->create_execution($task->id, self::STATUS_SUCCESS, $origin + [
             'requestid' => $requestid ?: null,
-            'origincategoryid' => $origincategoryid,
-            'origincategoryname' => $origincategoryname,
-            'origincategoryidnumber' => $origincategoryidnumber,
             'destinationcategoryid' => $destinationcategoryid,
-            'scheduleddeleteat' => $scheduleddeleteat,
+            'scheduleddeleteat' => time() + ((int)$task->retentiondays * DAYSECS),
             'deletestatus' => deletion_manager::STATUS_SCHEDULED,
-            'manualrun' => $manualrun ? 1 : 0,
+            // Not an error: the restore runs, but the category is neither moved nor managed.
+            'error' => $destinationcategoryid ? null
+                : get_string('relocationunresolved', 'local_coursetransfermanager', $origincategoryidnumber),
+            'errorcode' => $destinationcategoryid ? null : self::WARNING_RELOCATION,
         ]);
 
         notifier::execution_launched($task, $origincategoryname, (string)$site->host);
 
         mtrace('Task completed successfully. Request ID: ' . $requestid);
+        return true;
     }
 
     /**
      * Relocate the restored category under the destination parent and return its id.
      *
-     * The created category is resolved from the coursetransfer request row,
-     * because idnumbers are not unique and a global idnumber lookup breaks as
-     * soon as one is duplicated. The idnumber fallback only applies when
-     * it is unambiguous.
-     * A relocation problem never fails the execution: the restore already
-     * happened — it is logged and the category stays where it was created.
+     * A relocation problem never fails the execution: the restore already happened.
      *
      * @param int $requestid Coursetransfer request id returned by the restore.
-     * @param string $idnumber Restored category idnumber (fallback lookup).
+     * @param string $idnumber Origin category idnumber.
      * @param int $destinationparentid Destination parent category ID.
-     * @return int|null Id of the restored local category, when resolvable.
+     * @return int|null Id of the restored local category, when resolvable with certainty.
      */
     private function relocate_restored_category(int $requestid, string $idnumber, int $destinationparentid): ?int {
-        global $DB;
-
         try {
-            $categoryid = null;
-
-            if ($requestid > 0) {
-                $fromrequest = $DB->get_field('local_coursetransfer_request', 'target_category_id', ['id' => $requestid]);
-                $categoryid = $fromrequest ? (int)$fromrequest : null;
-            }
-
-            if (!$categoryid && $idnumber !== '') {
-                $records = $DB->get_records('course_categories', ['idnumber' => $idnumber], 'id', 'id, parent');
-                if (count($records) === 1) {
-                    $categoryid = (int)reset($records)->id;
-                } else if (count($records) > 1) {
-                    mtrace('Relocation skipped: idnumber "' . $idnumber . '" is ambiguous ('
-                        . count($records) . ' categories) and the request did not expose the created category.');
-                    return null;
-                }
-            }
-
+            $categoryid = $this->resolve_created_category($requestid, $idnumber);
             if (!$categoryid) {
-                mtrace('Relocation skipped: created category could not be resolved.');
+                mtrace('Relocation skipped: the created category could not be identified with certainty.');
                 return null;
             }
 
@@ -684,32 +875,89 @@ class task_manager {
     }
 
     /**
+     * The local category a coursetransfer category request created, or null if not certain.
+     *
+     * Resolved from the request itself (its target category, or the courses of its child
+     * requests), never by idnumber: idnumbers collide and a foreign category must never be taken.
+     *
+     * @param int $requestid Coursetransfer category request id.
+     * @param string $idnumber Origin category idnumber, to double-check the result.
+     * @return int|null
+     */
+    private function resolve_created_category(int $requestid, string $idnumber): ?int {
+        global $DB;
+
+        if ($requestid <= 0) {
+            return null;
+        }
+        $request = $DB->get_record(
+            'local_coursetransfer_request',
+            ['id' => $requestid],
+            'id, target_category_id, origin_category_requests'
+        );
+        if (!$request) {
+            return null;
+        }
+
+        $candidates = [];
+        if (!empty($request->target_category_id)) {
+            $candidates[] = (int)$request->target_category_id;
+        } else {
+            $children = array_filter(array_map('intval', (array)json_decode((string)$request->origin_category_requests, true)));
+            if (empty($children)) {
+                return null;
+            }
+            [$insql, $params] = $DB->get_in_or_equal($children, SQL_PARAMS_NAMED);
+            $paths = $DB->get_fieldset_sql(
+                "SELECT DISTINCT cc.path
+                   FROM {local_coursetransfer_request} r
+                   JOIN {course} c ON c.id = r.target_course_id
+                   JOIN {course_categories} cc ON cc.id = c.category
+                  WHERE r.id $insql",
+                $params
+            );
+            // The created category is the top of the restored tree (coursetransfer creates it at the root).
+            foreach ($paths as $path) {
+                $candidates[] = (int)explode('/', trim((string)$path, '/'))[0];
+            }
+            $candidates = array_values(array_unique($candidates));
+        }
+        if (count($candidates) !== 1) {
+            return null;
+        }
+
+        $category = $DB->get_record('course_categories', ['id' => $candidates[0]], 'id, idnumber');
+        if (!$category) {
+            return null;
+        }
+        // Same idnumber, or the one coursetransfer derives when it collides (idnumber_uniqid).
+        if (
+            $idnumber !== '' && $category->idnumber !== $idnumber
+                && !str_starts_with((string)$category->idnumber, $idnumber . '_')
+        ) {
+            return null;
+        }
+        return (int)$category->id;
+    }
+
+    /**
      * Exercise the origin sync pipeline before attempting a restore.
      *
-     * Calls local_coursetransfer_site_origin_test on the remote so we fail fast
-     * (and traceably) when token, target verification, or connectivity are off
-     * — instead of erroring deep inside the restore call.
+     * Fails fast (and traceably) when token, target verification or connectivity are off.
      *
      * @param stdClass $site
+     * @param stdClass $user Identity presented to the origin.
      * @return void
-     * @throws moodle_exception
+     * @throws moodle_exception originsyncfailed, with the cause in the message.
      */
-    private function verify_origin_sync(stdClass $site): void {
-        global $USER;
-
+    private function verify_origin_sync(stdClass $site, stdClass $user): void {
         mtrace('Verifying origin sync against ' . $site->host . ' ...');
 
         try {
-            $response = (new request($site))->site_origin_test($USER);
+            $response = (new request($site))->site_origin_test($user);
         } catch (Throwable $e) {
             mtrace('Origin sync verification threw: ' . $e->getMessage());
-            throw new moodle_exception(
-                'originsyncfailed',
-                'local_coursetransfermanager',
-                '',
-                null,
-                $e->getMessage()
-            );
+            throw new moodle_exception('originsyncfailed', 'local_coursetransfermanager', '', $e->getMessage());
         }
 
         if (!empty($response->success)) {
@@ -719,88 +967,8 @@ class task_manager {
 
         $detail = origin::format_errors($response->errors ?? []);
         mtrace('Origin sync verification failed: ' . $detail);
-        throw new moodle_exception(
-            'originsyncfailed',
-            'local_coursetransfermanager',
-            '',
-            null,
-            $detail
-        );
-    }
-
-    /**
-     * Resolve a remote category by idnumber regex through the WS exposed by the origin.
-     *
-     * @param string $siteurl
-     * @param string $token
-     * @param string $pattern
-     * @return array {id, name, idnumber}
-     * @throws moodle_exception
-     */
-    public static function get_remote_category_by_idnumber(string $siteurl, string $token, string $pattern): array {
-        global $CFG;
-
-        require_once($CFG->libdir . '/filelib.php');
-
-        $siteurl = rtrim($siteurl, '/');
-
-        $params = [
-            'wstoken' => $token,
-            'wsfunction' => 'local_coursetransfer_get_category_idnumber',
-            'moodlewsrestformat' => 'json',
-            'pattern' => $pattern,
-        ];
-
-        $curl = new curl();
-        $response = $curl->post($siteurl . '/webservice/rest/server.php', $params);
-        mtrace('Remote URL: ' . $siteurl . '/webservice/rest/server.php');
-        mtrace('Remote response: ' . $response);
-        if (empty($response)) {
-            throw new moodle_exception('emptyresponse', 'local_coursetransfermanager');
-        }
-
-        $data = json_decode($response, true);
-        if (!is_array($data)) {
-            throw new moodle_exception('invalidresponse', 'local_coursetransfermanager');
-        }
-
-        // Surface remote Moodle web service errors using their standard envelope.
-        if (!empty($data['exception'])) {
-            $detail = trim(($data['errorcode'] ?? '') . ' ' . ($data['message'] ?? ''));
-            throw new moodle_exception(
-                'remotecategoryerror',
-                'local_coursetransfermanager',
-                '',
-                null,
-                $detail !== '' ? $detail : $data['exception']
-            );
-        }
-
-        if (empty($data['success'])) {
-            throw new moodle_exception(
-                'remotecategoryerror',
-                'local_coursetransfermanager',
-                '',
-                null,
-                $data['error'] ?? 'Unknown remote response'
-            );
-        }
-
-        if (empty($data['category']['id'])) {
-            throw new moodle_exception(
-                'remotecategoryerror',
-                'local_coursetransfermanager',
-                '',
-                null,
-                'Remote category ID not found in response'
-            );
-        }
-
-        return [
-            'id' => (int)$data['category']['id'],
-            'name' => (string)($data['category']['name'] ?? ''),
-            'idnumber' => (string)($data['category']['idnumber'] ?? ''),
-        ];
+        // The cause goes in $a: debuginfo is dropped from the message in production.
+        throw new moodle_exception('originsyncfailed', 'local_coursetransfermanager', '', $detail);
     }
 
     /**
@@ -810,7 +978,7 @@ class task_manager {
      * @param string $status
      * @param array $extra Optional fields: requestid, origincategoryid, origincategoryname,
      *                     origincategoryidnumber, destinationcategoryid, scheduleddeleteat,
-     *                     deletestatus, manualrun, error.
+     *                     deletestatus, manualrun, error, errorcode.
      * @return int The execution id.
      * @throws dml_exception
      */
@@ -828,7 +996,7 @@ class task_manager {
             'destinationcategoryid' => $extra['destinationcategoryid'] ?? null,
             'scheduleddeleteat' => $extra['scheduleddeleteat'] ?? null,
             'deletestatus' => $extra['deletestatus'] ?? null,
-            'errorcode' => !empty($extra['error']) ? 'processing_error' : null,
+            'errorcode' => $extra['errorcode'] ?? (!empty($extra['error']) ? 'processing_error' : null),
             'errormessage' => $extra['error'] ?? null,
             'timecreated' => time(),
             'timemodified' => time(),
@@ -871,12 +1039,17 @@ class task_manager {
             return $taskcache[$taskid];
         };
 
-        // N3 — advance notices go out BEFORE any deletion runs.
-        foreach (deletion_manager::get_due_warnings($now, notifier::warning_lead_seconds()) as $warning) {
+        // N3 — advance notices go out BEFORE any deletion runs. A late notice (cron down,
+        // short retention) moves the deletion so the notice always comes first.
+        $lead = notifier::warning_lead_seconds();
+        foreach (deletion_manager::get_due_warnings($now, $lead) as $warning) {
+            if (!deletion_manager::mark_warned((int)$warning->id, $now + $lead)) {
+                continue;
+            }
+            $warning->scheduleddeleteat = max((int)$warning->scheduleddeleteat, $now + $lead);
             if ($task = $gettask((int)$warning->taskid)) {
                 notifier::deletion_warning($task, $warning);
             }
-            deletion_manager::mark_warned((int)$warning->id);
         }
 
         // Due deletions in the origin platform (N4 on success, N7 on rejection).
@@ -892,25 +1065,28 @@ class task_manager {
                 notifier::deletion_held($task, (string)$result->execution->origincategoryname, $result->detail);
             } else if ($result->outcome === deletion_manager::STATUS_FAILED) {
                 notifier::execution_error($task, $result->detail);
+            } else if ($result->outcome === deletion_manager::STATUS_AWAITING_APPROVAL) {
+                notifier::deletion_approval($task, (string)$result->execution->origincategoryname);
             }
-            // Transient (retry) outcomes stay silent: the next tick retries.
+            // Transient (retry) and skipped (cancelled meanwhile) outcomes stay silent.
         }
 
         // Two-phase pruning: announce candidates (N5), then prune the ones out of grace (N6).
-        $gracedays = get_config('local_coursetransfermanager', 'prunegracedays');
-        $gracedays = ($gracedays === false || $gracedays === '') ? self::DEFAULT_PRUNE_GRACE_DAYS : (int)$gracedays;
-
-        foreach (prune_manager::detect($now, $gracedays) as $candidate) {
+        foreach (prune_manager::detect($now, lifecycle_config::grace_days()) as $candidate) {
             if ($task = $gettask((int)$candidate->taskid)) {
                 notifier::prune_warning($task, $candidate);
             }
         }
 
         foreach (prune_manager::execute_due($now) as $result) {
+            $task = $gettask((int)$result->candidate->taskid);
+            if (!$task) {
+                continue;
+            }
             if ($result->outcome === prune_manager::STATUS_DONE) {
-                if ($task = $gettask((int)$result->candidate->taskid)) {
-                    notifier::prune_done($task, (string)$result->candidate->categoryname);
-                }
+                notifier::prune_done($task, (string)$result->candidate->categoryname);
+            } else if ($result->outcome === 'invalid') {
+                notifier::execution_error($task, $result->detail);
             }
         }
 

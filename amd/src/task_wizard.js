@@ -551,8 +551,18 @@ define([
 
     // ---- Step 5: review ------------------------------------------------------
 
+    /**
+     * Idnumber of the category this task archives: the academic year in progress minus the years kept in
+     * production, as in the retention step and in the run itself; not the year in progress (CTM-016).
+     *
+     * @return {String}
+     */
+    var archivedIdnumber = function() {
+        return resolvePattern(state.categorypattern, currentYear() - state.originkeepyears);
+    };
+
     var renderReview = function() {
-        var resolved = resolvePattern(state.categorypattern);
+        var resolved = archivedIdnumber();
         var host = selectedHost();
         var deletion = preview.firstrun ? preview.firstrun + state.retentiondays * 86400 : 0;
         var warning = deletion ? deletion - cfg.warningdays * 86400 : 0;
@@ -599,7 +609,7 @@ define([
     };
 
     var renderTimeline = function() {
-        var resolved = resolvePattern(state.categorypattern);
+        var resolved = archivedIdnumber();
         var host = selectedHost();
         var deletion = preview.firstrun ? preview.firstrun + state.retentiondays * 86400 : 0;
         var warning = deletion ? deletion - cfg.warningdays * 86400 : 0;

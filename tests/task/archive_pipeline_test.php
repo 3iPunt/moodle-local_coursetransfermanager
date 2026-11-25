@@ -472,6 +472,20 @@ final class archive_pipeline_test extends advanced_testcase {
     }
 
     /**
+     * CTM-015 — run now answers a web request: the progress lines meant for the cron log must not reach the
+     * output, or they would go before the JSON of the answer.
+     */
+    public function test_run_now_prints_nothing(): void {
+        $seed = $this->seed();
+        $remote = $this->remote_category($this->idnumber($seed->threshold));
+        $this->origin_answers([$this->ok(), $this->ok([$remote]), $this->ko('detail refused')]);
+        $this->redirectMessages();
+
+        $this->expectOutputString('');
+        (new task_manager())->run_now((int) $seed->task->id);
+    }
+
+    /**
      * H10 — a task without a next run time is not taken as overdue: its schedule is
      * recomputed and nothing runs outside it.
      */

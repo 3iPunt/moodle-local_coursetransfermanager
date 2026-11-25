@@ -72,10 +72,9 @@ jobs:
       - name: Install moodle-plugin-ci
         # CourseTransfer Manager builds on CourseTransfer: its dependency has to
         # be present in the Moodle tree or the plugin will not even install.
-        # Pinned to the 2.2.0 release branch until UNIMOODLE tags v2.2.0; then pin the tag again,
-        # so upstream commits cannot turn it red.
+        # Pinned to a release tag, so upstream commits cannot turn it red.
         run: |
-          moodle-plugin-ci add-plugin --branch release/2.2.0 UNIMOODLE/moodle-local_coursetransfer
+          moodle-plugin-ci add-plugin --branch v2.2.1 UNIMOODLE/moodle-local_coursetransfer
           moodle-plugin-ci install --plugin ./plugin --db-host=127.0.0.1
         env:
           DB: ${{ matrix.database }}

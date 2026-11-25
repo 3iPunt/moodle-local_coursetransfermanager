@@ -321,11 +321,15 @@ final class rotation {
             "taskid = :taskid AND (status $insql OR (status = :error AND requestid IS NOT NULL))",
             $params,
             '',
-            'id, origincategoryid, origincategoryidnumber'
+            'id, status, requestid, destinationcategoryid, origincategoryid, origincategoryidnumber'
         );
 
         $archived = (object) ['ids' => [], 'idnumbers' => []];
         foreach ($rows as $row) {
+            if ($row->status === task_manager::STATUS_ERROR && !self::launched_something($row)) {
+                // Failed before creating anything here (e.g. the origin did not answer): it can be tried again (B6).
+                continue;
+            }
             if (!empty($row->origincategoryid)) {
                 $archived->ids[(int) $row->origincategoryid] = true;
             }
@@ -334,6 +338,32 @@ final class rotation {
             }
         }
         return $archived;
+    }
+
+    /**
+     * Whether a failed archive left something in this platform, so launching it again would duplicate it.
+     *
+     * Course Transfer creates its category request before asking the origin for the courses: a request
+     * without courses nor target category created nothing. A request that is gone is treated as launched.
+     *
+     * @param stdClass $row Execution row (requestid, destinationcategoryid).
+     * @return bool
+     */
+    private static function launched_something(stdClass $row): bool {
+        global $DB;
+        if (!empty($row->destinationcategoryid)) {
+            return true;
+        }
+        $request = $DB->get_record(
+            'local_coursetransfer_request',
+            ['id' => (int) $row->requestid],
+            'id, target_category_id, origin_category_requests'
+        );
+        if (!$request) {
+            return true;
+        }
+        $children = json_decode((string) $request->origin_category_requests, true);
+        return !empty($request->target_category_id) || !empty($children);
     }
 
     /**

@@ -25,14 +25,14 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_coursetransfermanager';
-$plugin->version = 2026112001;
+$plugin->version = 2026112401;
 $plugin->requires = 2024100700;
 $plugin->supported = [405, 503];
 $plugin->maturity = MATURITY_STABLE;
-$plugin->release = '2.2.0';
+$plugin->release = '2.2.3';
 $plugin->dependencies = [
-    // HARD dependency on CourseTransfer 2.2.0 on THIS platform: the deletion locks rely on
-    // its service-user capability, verified restores and request identity. The remote
-    // ORIGIN platform only needs the stable backend web services (>= 2026051301).
-    'local_coursetransfer' => 2026112001,
+    // HARD dependency on CourseTransfer 2.2.1 on THIS platform (2.2.2 recommended): the deletion locks
+    // rely on its complete transfers and its restore manifest. The ORIGIN should run 2.2.1 or later too:
+    // older origins make backups that the manifest holds, so their deletions wait.
+    'local_coursetransfer' => 2026112002,
 ];

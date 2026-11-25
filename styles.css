@@ -1989,3 +1989,9 @@ body.ctm-wide {
         margin-left: 0;
     }
 }
+
+.local-coursetransfermanager .ct-delcard-held {
+    display: block;
+    margin: 10px 0;
+    font-weight: 400;
+}

@@ -222,8 +222,12 @@ final class deletion_manager_test extends \advanced_testcase {
             ['id' => $catrequest->id]
         );
 
+        // The platform the copy came from: the deletion only goes there (2.2.2).
+        if (!isset($taskoverrides['originsiteid'])) {
+            $taskoverrides['originsiteid'] = $ctgenerator->create_site('origin', ['host' => 'https://origin.example.com'])->id;
+        }
         $task = $this->getDataGenerator()->get_plugin_generator('local_coursetransfermanager')->create_task(array_merge([
-            'originsiteid' => 1, 'targetcategoryid' => $category->parent,
+            'targetcategoryid' => $category->parent,
         ], $taskoverrides));
         $execution = $this->getDataGenerator()->get_plugin_generator('local_coursetransfermanager')->create_execution([
             'taskid' => $task->id, 'status' => 'completed', 'requestid' => $catrequest->id,
@@ -293,6 +297,8 @@ final class deletion_manager_test extends \advanced_testcase {
         global $DB;
         $this->resetAfterTest();
         $this->setAdminUser();
+        // R3 (origin unchanged) runs before R2v since 2.2.2: off here, so the origin is not asked.
+        set_config('holdiforiginchanged', 0, 'local_coursetransfermanager');
         $seed = $this->seed_verified();
         $children = json_decode((string)$DB->get_field(
             'local_coursetransfer_request',

@@ -221,7 +221,7 @@
                 </span>
                 {{#error}}
                 <div class="ct-hist-error" data-region="hist-error" hidden>
-                    <strong>{{#str}} exec_error_title, local_coursetransfermanager {{/str}}</strong>
+                    <strong>{{#errortitle}}{{ errortitle }}{{/errortitle}}{{^errortitle}}{{#str}} exec_error_title, local_coursetransfermanager {{/str}}{{/errortitle}}</strong>
                     <p>{{{ error }}}</p>
                     {{#requesturl}}<a href="{{ requesturl }}">{{#str}} exec_fine_detail, local_coursetransfermanager {{/str}}</a>{{/requesturl}}
                 </div>

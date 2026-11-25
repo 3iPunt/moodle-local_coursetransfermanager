@@ -55,7 +55,7 @@ final class deletion_manager {
     /** @var string An admin cancelled the deletion; the category stays in the origin. */
     public const STATUS_CANCELLED = 'cancelled';
 
-    /** @var string The category was removed from the origin platform. */
+    /** @var string The origin accepted the removal request (it deletes the category in its own cron). */
     public const STATUS_DONE = 'done';
 
     /** @var string The origin rejected the removal; it will not be retried. */
@@ -70,15 +70,22 @@ final class deletion_manager {
     /** @var string[] Pending states a person can still cancel. */
     public const CANCELLABLE = [self::STATUS_SCHEDULED, self::STATUS_WARNED, self::STATUS_AWAITING_APPROVAL];
 
+    /** @var string[] Every state of a deletion that may still be requested to the origin. */
+    public const PENDING = [self::STATUS_SCHEDULED, self::STATUS_WARNED, self::STATUS_AWAITING_APPROVAL, self::STATUS_RUNNING];
+
+    /** @var string Prefix of the execution errorcode that records the rule holding its deletion. */
+    public const HOLD_CODE_PREFIX = 'held_';
+
     /** @var int After this long a claim is taken as abandoned (the cron died mid-call). */
     public const RUNNING_STALE_SECONDS = HOURSECS;
 
     /** @var string Pending deletions joined with what the safety rules need from their task. */
     private const DUE_SQL = "SELECT e.id, e.taskid, t.name AS taskname, t.originsiteid, t.usercreated,
                                     t.notifylevel, t.notifyrecipients, t.categorypattern, t.originkeepyears,
-                                    t.destinationkeepyears, e.status, e.requestid, e.destinationcategoryid,
-                                    e.origincategoryid, e.origincategoryname, e.origincategoryidnumber,
-                                    e.scheduleddeleteat, e.deletestatus, e.timecreated
+                                    t.destinationkeepyears, t.restoreuserdata, e.status, e.requestid,
+                                    e.destinationcategoryid, e.origincategoryid, e.origincategoryname,
+                                    e.origincategoryidnumber, e.scheduleddeleteat, e.deletestatus, e.errorcode,
+                                    e.errormessage, e.timecreated
                                FROM {local_coursetransfermanager_executions} e
                                JOIN {local_coursetransfermanager_tasks} t ON t.id = e.taskid";
 
@@ -89,7 +96,7 @@ final class deletion_manager {
      * Pending (cancellable) deletions, oldest first.
      *
      * @param int|null $taskid Restrict to one task, or null for all.
-     * @return stdClass[] Execution rows with taskname and originsiteid.
+     * @return stdClass[] Execution rows with taskname, originsiteid and the hold (errorcode, errormessage).
      */
     public static function get_pending(?int $taskid = null): array {
         global $DB;
@@ -103,7 +110,7 @@ final class deletion_manager {
 
         $sql = "SELECT e.id, e.taskid, t.name AS taskname, t.originsiteid, t.usercreated,
                        e.origincategoryid, e.origincategoryname, e.origincategoryidnumber,
-                       e.scheduleddeleteat, e.deletestatus
+                       e.scheduleddeleteat, e.deletestatus, e.errorcode, e.errormessage
                   FROM {local_coursetransfermanager_executions} e
                   JOIN {local_coursetransfermanager_tasks} t ON t.id = e.taskid
                  WHERE e.deletestatus IN (?, ?, ?)" . $taskwhere . "
@@ -334,9 +341,11 @@ final class deletion_manager {
      *
      * Outcome per row:
      * - Removal accepted by the origin → done (also closes sibling pending
-     *   rows for the same category, so it is not re-deleted).
+     *   rows for the same category, so it is not re-deleted). The origin
+     *   deletes the category in its own cron: done means requested and accepted.
      * - Origin rejected the removal → failed (no retry; needs human review).
-     * - Safety lock not satisfied → held (postponed + notified).
+     * - Safety lock not satisfied → held (postponed, rule and reason recorded
+     *   on the execution, notified).
      * - Cancelled while being processed → skipped.
      * - Connectivity error → left pending, retried on the next cron tick.
      *
@@ -368,6 +377,7 @@ final class deletion_manager {
             $check = self::check($execution);
             if ($check->rule !== null) {
                 self::postpone($execution->id, $now);
+                self::record_hold($execution, $check->rule, $check->reason);
                 mtrace('Remote deletion HELD (' . $check->rule . ') for origin category id='
                     . $execution->origincategoryid . ': ' . $check->reason);
                 deletion_held::log((int) $execution->id, $name, $check->rule, (int) $execution->usercreated, $check->reason);
@@ -376,6 +386,7 @@ final class deletion_manager {
             }
             if ($check->needsapproval) {
                 if (self::await_approval((int) $execution->id, $now)) {
+                    self::clear_hold((int) $execution->id);
                     mtrace('Remote deletion AWAITING APPROVAL for origin category id=' . $execution->origincategoryid);
                     deletion_held::log((int) $execution->id, $name, 'approval', (int) $execution->usercreated);
                     $results[] = (object) ['execution' => $execution, 'outcome' => self::STATUS_AWAITING_APPROVAL,
@@ -389,6 +400,7 @@ final class deletion_manager {
                 $results[] = (object) ['execution' => $execution, 'outcome' => 'skipped', 'detail' => ''];
                 continue;
             }
+            self::clear_hold((int) $execution->id);
             deletion_requested::log((int) $execution->id, $name, $check->passed, (int) $execution->usercreated);
             try {
                 $site = origin::site((int) $execution->originsiteid);
@@ -396,7 +408,8 @@ final class deletion_manager {
 
                 if (!empty($result['success'])) {
                     self::close_pending($execution->taskid, (int) $execution->origincategoryid, self::STATUS_DONE);
-                    mtrace('Remote deletion sent for origin category id=' . $execution->origincategoryid);
+                    mtrace('Remote deletion requested and accepted by the origin for category id='
+                        . $execution->origincategoryid);
                     deletion_executed::log((int) $execution->id, $name, $check->passed, (int) $execution->usercreated);
                     $results[] = (object) ['execution' => $execution, 'outcome' => self::STATUS_DONE, 'detail' => ''];
                 } else {
@@ -433,19 +446,24 @@ final class deletion_manager {
     }
 
     /**
-     * Run every safety rule on a pending deletion, without changing anything.
+     * Run every safety rule on a pending deletion, without changing anything here.
      *
-     * R1 restore completed, R2 archived copy intact, R2v restore verified by local_coursetransfer,
-     * creator usable, R3 origin unchanged
-     * (only asks the origin, read only); then whether a person must approve it.
+     * Local rules first (R1 restore completed, R2 archived copy intact, site the copy came from,
+     * R2u user data asked for and received), then the creator, then R3 (the origin answers and its
+     * category is unchanged, read only) and only then R2v (restore verified by local_coursetransfer),
+     * which may ask the origin for the manifests not checked yet and record the result. Last,
+     * whether a person must approve it.
      *
      * @param stdClass $execution Row from {@see self::DUE_SQL}.
-     * @return stdClass {rule: ?string, reason: ?string, passed: string, user: ?stdClass, needsapproval: bool, notes: string[]}
+     * @param bool $readonly True for the simulation: R2v is not run on manifests not verified yet
+     *                       (that would write), they are reported as pending instead.
+     * @return stdClass {rule: ?string, reason: ?string, passed: string, user: ?stdClass, needsapproval: bool,
+     *                  notes: string[], pending: ?string}
      */
-    public static function check(stdClass $execution): stdClass {
+    public static function check(stdClass $execution, bool $readonly = false): stdClass {
         $name = format_string((string) $execution->origincategoryname);
         $check = (object) ['rule' => null, 'reason' => null, 'passed' => '', 'user' => null,
-            'needsapproval' => false, 'notes' => []];
+            'needsapproval' => false, 'notes' => [], 'pending' => null];
         $passed = [];
 
         // R1 — completeness lock: "launched" is not "finished".
@@ -458,7 +476,57 @@ final class deletion_manager {
             return self::held($check, 'R2', get_string('deletion_held_archivemissing', 'local_coursetransfermanager', $name));
         }
         $passed[] = 'R2';
+        $request = self::category_request((int) $execution->requestid);
+        // Site — the removal only goes to the platform the copy came from, even if the task now points elsewhere.
+        $reason = self::origin_moved($execution, $request);
+        if ($reason !== null) {
+            return self::held($check, 'site', $reason);
+        }
+        $passed[] = 'site';
+        // R2u — user data was asked for: a copy that arrived without it (or anonymised) loses the students' work.
+        $missing = self::userdata_missing($execution, $request->children);
+        if ($missing) {
+            return self::held($check, 'R2u', get_string('deletion_held_nouserdata', 'local_coursetransfermanager', (object) [
+                'name' => $name,
+                'courses' => implode(', ', $missing),
+            ]));
+        }
+        $passed[] = 'R2u';
+        // The origin is asked as the task creator, never as whoever runs the cron.
+        $check->user = task_manager::task_user($execution);
+        if (!$check->user) {
+            return self::held($check, 'creator', get_string('deletion_held_nocreator', 'local_coursetransfermanager', (object) [
+                'name' => $name,
+                'userid' => (int) $execution->usercreated,
+            ]));
+        }
+        // R3 — the origin answers and its category still is what was archived.
+        if (lifecycle_config::hold_if_origin_changed()) {
+            $reason = self::origin_changed($execution, $check->user, $request->children, $check->notes);
+            if ($reason !== null) {
+                return self::held($check, 'R3', $reason);
+            }
+            $passed[] = 'R3';
+        }
+        // R2v asks the origin as whoever requested the copy: an account that cannot act there would
+        // only produce a failed check, recorded as a mismatch by older local_coursetransfer releases.
+        $requester = self::unusable_requester($request);
+        if ($requester !== null) {
+            return self::held($check, 'requester', get_string('deletion_held_requester', 'local_coursetransfermanager', (object) [
+                'name' => $name,
+                'userid' => $requester,
+            ]));
+        }
         // R2v — local_coursetransfer confirms every course of the restore finished (and its manifest, when enabled).
+        $unverified = self::unverified_manifests($request->children);
+        if ($readonly && $unverified > 0) {
+            $check->pending = get_string('deletion_pending_verify', 'local_coursetransfermanager', (object) [
+                'name' => $name,
+                'count' => $unverified,
+            ]);
+            $check->passed = implode('+', $passed);
+            return $check;
+        }
         $issues = self::restore_issues((int) $execution->requestid);
         if ($issues) {
             return self::held($check, 'R2v', get_string(
@@ -468,22 +536,6 @@ final class deletion_manager {
             ));
         }
         $passed[] = 'R2v';
-        // The origin is asked as the task creator, never as whoever runs the cron.
-        $check->user = task_manager::task_user($execution);
-        if (!$check->user) {
-            return self::held($check, 'creator', get_string('deletion_held_nocreator', 'local_coursetransfermanager', (object) [
-                'name' => $name,
-                'userid' => (int) $execution->usercreated,
-            ]));
-        }
-        // R3 — the origin category still is what was archived.
-        if (lifecycle_config::hold_if_origin_changed()) {
-            $reason = self::origin_changed($execution, $check->user, $check->notes);
-            if ($reason !== null) {
-                return self::held($check, 'R3', $reason);
-            }
-            $passed[] = 'R3';
-        }
         $check->passed = implode('+', $passed);
         $check->needsapproval = self::needs_approval((object) [
             'id' => $execution->taskid,
@@ -507,6 +559,163 @@ final class deletion_manager {
         $check->rule = $rule;
         $check->reason = $reason;
         return $check;
+    }
+
+    /**
+     * The category request of an execution with its course requests.
+     *
+     * @param int $requestid Category request id.
+     * @return stdClass {siteurl: string, userid: int, children: stdClass[]} (empty values when it is gone).
+     */
+    private static function category_request(int $requestid): stdClass {
+        global $DB;
+
+        $result = (object) ['siteurl' => '', 'userid' => 0, 'children' => []];
+        $request = $requestid > 0 ? $DB->get_record(
+            'local_coursetransfer_request',
+            ['id' => $requestid],
+            'id, siteurl, userid, origin_category_requests'
+        ) : false;
+        if (!$request) {
+            return $result;
+        }
+        $result->siteurl = (string) $request->siteurl;
+        $result->userid = (int) $request->userid;
+        $children = array_filter(array_map('intval', (array) json_decode((string) $request->origin_category_requests, true)));
+        if ($children) {
+            [$insql, $params] = $DB->get_in_or_equal($children);
+            $result->children = $DB->get_records_select(
+                'local_coursetransfer_request',
+                "id $insql",
+                $params,
+                'id',
+                'id, userid, origin_course_id, origin_course_fullname, origin_course_shortname, origin_enrolusers,
+                 origin_manifest'
+            );
+        }
+        return $result;
+    }
+
+    /**
+     * Site rule: why the removal would not reach the platform the copy came from, or null when it would.
+     *
+     * The task's origin can be changed after archiving; the removal always goes to the task's
+     * current origin, so it only runs while that is the platform the copy was brought from.
+     *
+     * @param stdClass $execution Due execution row.
+     * @param stdClass $request {@see self::category_request()}.
+     * @return string|null
+     */
+    private static function origin_moved(stdClass $execution, stdClass $request): ?string {
+        $name = format_string((string) $execution->origincategoryname);
+        try {
+            $host = (string) origin::site((int) $execution->originsiteid)->host;
+        } catch (\Throwable $e) {
+            return get_string('deletion_held_originmissing', 'local_coursetransfermanager', (object) [
+                'name' => $name,
+                'detail' => $e->getMessage(),
+            ]);
+        }
+        $from = self::normalise_host($request->siteurl);
+        if ($from !== '' && $from === self::normalise_host($host)) {
+            return null;
+        }
+        return get_string('deletion_held_originmoved', 'local_coursetransfermanager', (object) [
+            'name' => $name,
+            'from' => $request->siteurl !== '' ? $request->siteurl : '-',
+            'to' => $host,
+        ]);
+    }
+
+    /**
+     * A host as Course Transfer stores it, compared case-insensitively.
+     *
+     * @param string $host Host URL.
+     * @return string
+     */
+    private static function normalise_host(string $host): string {
+        return strtolower(rtrim(trim($host), '/'));
+    }
+
+    /**
+     * R2u: courses whose copy arrived without the user data that was asked for (or anonymised).
+     *
+     * Read from the backup manifest local_coursetransfer stores on each course request; a course
+     * without that record is left to R2v.
+     *
+     * @param stdClass $execution Due execution row (restoreuserdata of its task).
+     * @param stdClass[] $children Course requests of the category request.
+     * @return string[] Course names; empty when nothing is missing.
+     */
+    private static function userdata_missing(stdClass $execution, array $children): array {
+        $missing = [];
+        foreach ($children as $child) {
+            if (empty($execution->restoreuserdata) && empty($child->origin_enrolusers)) {
+                continue;
+            }
+            $manifest = json_decode((string) ($child->origin_manifest ?? ''), true);
+            if (!is_array($manifest) || !isset($manifest['backup']) || !is_array($manifest['backup'])) {
+                continue;
+            }
+            $backup = $manifest['backup'];
+            $nousers = array_key_exists('users', $backup) ? empty($backup['users']) : !isset($backup['enrolments']);
+            if ($nousers || !empty($backup['anonymized'])) {
+                $missing[] = format_string((string) ($child->origin_course_fullname ?: $child->origin_course_shortname));
+            }
+        }
+        return $missing;
+    }
+
+    /**
+     * Id of the first account behind the copy that can no longer act (deleted or suspended), or null.
+     *
+     * @param stdClass $request {@see self::category_request()}.
+     * @return int|null
+     */
+    private static function unusable_requester(stdClass $request): ?int {
+        $userids = array_unique(array_filter(array_merge(
+            [(int) $request->userid],
+            array_map(static fn(stdClass $child): int => (int) $child->userid, $request->children)
+        )));
+        foreach ($userids as $userid) {
+            if (!task_manager::task_user((object) ['usercreated' => $userid])) {
+                return $userid;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * How many course requests still have a manifest that R2v would check against the origin now.
+     *
+     * @param stdClass[] $children Course requests of the category request.
+     * @return int
+     */
+    private static function unverified_manifests(array $children): int {
+        if (!self::manifest_check_enabled()) {
+            return 0;
+        }
+        $count = 0;
+        foreach ($children as $child) {
+            $manifest = json_decode((string) ($child->origin_manifest ?? ''), true);
+            if (!is_array($manifest) || empty($manifest['verified'])) {
+                $count++;
+            }
+        }
+        return $count;
+    }
+
+    /**
+     * Whether local_coursetransfer checks each restored course against its origin before removing it.
+     *
+     * @return bool
+     */
+    private static function manifest_check_enabled(): bool {
+        if (class_exists(\local_coursetransfer\restore_manifest::class)) {
+            return \local_coursetransfer\restore_manifest::enabled();
+        }
+        $value = get_config('local_coursetransfer', 'verifymanifest');
+        return $value === false || $value === '' || (bool) $value;
     }
 
     /**
@@ -536,17 +745,18 @@ final class deletion_manager {
     /**
      * R3: why the origin category no longer matches what was archived, or null when it does.
      *
-     * Compares the origin's current courses with the ones this execution's request brought.
-     * An origin that does not answer is a reason too: nothing is deleted without checking.
+     * Compares the origin's current courses with the ones this execution's request brought, and
+     * holds while the origin reports content the task creator cannot see there: it was not copied,
+     * and the removal in the origin is recursive. An origin that does not answer is a reason too:
+     * nothing is deleted without checking.
      *
      * @param stdClass $execution Due execution row.
      * @param stdClass $user Identity presented to the origin.
+     * @param stdClass[] $children Course requests of the category request.
      * @param string[] $notes Receives what the check could not verify.
      * @return string|null
      */
-    private static function origin_changed(stdClass $execution, stdClass $user, array &$notes): ?string {
-        global $DB;
-
+    private static function origin_changed(stdClass $execution, stdClass $user, array $children, array &$notes): ?string {
         $name = format_string((string) $execution->origincategoryname);
         try {
             $site = origin::site((int) $execution->originsiteid);
@@ -555,28 +765,31 @@ final class deletion_manager {
             $response = (object) ['success' => false, 'errors' => [$e->getMessage()]];
         }
         if (empty($response->success)) {
-            return get_string('deletion_held_originunreachable', 'local_coursetransfermanager', (object) [
+            $errors = (array) ($response->errors ?? []);
+            $codes = array_map(static fn($error): string => (string) (((array) $error)['code'] ?? ''), $errors);
+            // The origin answers but refuses the account: say so, not that it did not answer (A4, CTM-014).
+            $key = array_intersect($codes, ['17002', '17004', '17005'])
+                ? 'deletion_held_originaccount' : 'deletion_held_originunreachable';
+            return get_string($key, 'local_coursetransfermanager', (object) [
                 'name' => $name,
-                'detail' => origin::format_errors((array) ($response->errors ?? [])),
+                'detail' => origin::format_errors($errors),
+            ]);
+        }
+
+        $hiddencategories = (int) ($response->data->hiddencategories ?? 0);
+        $hiddencourses = (int) ($response->data->hiddencourses ?? 0);
+        if ($hiddencategories > 0 || $hiddencourses > 0) {
+            return get_string('deletion_held_originhidden', 'local_coursetransfermanager', (object) [
+                'name' => $name,
+                'categories' => $hiddencategories,
+                'courses' => $hiddencourses,
+                'user' => fullname($user),
             ]);
         }
 
         $archived = [];
-        $children = $DB->get_field('local_coursetransfer_request', 'origin_category_requests', ['id' => $execution->requestid]);
-        $children = array_filter(array_map('intval', (array) json_decode((string) $children, true)));
-        if ($children) {
-            [$insql, $params] = $DB->get_in_or_equal($children);
-            foreach (
-                $DB->get_records_select(
-                    'local_coursetransfer_request',
-                    "id $insql",
-                    $params,
-                    '',
-                    'id, origin_course_id, origin_course_fullname'
-                ) as $child
-            ) {
-                $archived[(int) $child->origin_course_id] = (string) $child->origin_course_fullname;
-            }
+        foreach ($children as $child) {
+            $archived[(int) $child->origin_course_id] = (string) $child->origin_course_fullname;
         }
 
         $current = [];
@@ -616,6 +829,80 @@ final class deletion_manager {
             'name' => $name,
             'changes' => implode('; ', $changes),
         ]);
+    }
+
+    /**
+     * Record on the execution the rule that holds its deletion and why, for the panel and the history.
+     *
+     * A relocation warning is kept: it already says why the copy cannot be checked.
+     *
+     * @param stdClass $execution Due execution row (id, errorcode).
+     * @param string $rule Rule code.
+     * @param string $reason Human reason.
+     * @return void
+     */
+    private static function record_hold(stdClass $execution, string $rule, string $reason): void {
+        global $DB;
+        if (($execution->errorcode ?? null) === task_manager::WARNING_RELOCATION) {
+            return;
+        }
+        $DB->update_record('local_coursetransfermanager_executions', (object) [
+            'id' => (int) $execution->id,
+            'errorcode' => self::HOLD_CODE_PREFIX . $rule,
+            'errormessage' => $reason,
+        ]);
+    }
+
+    /**
+     * Forget a recorded hold once every rule passes again.
+     *
+     * @param int $executionid Execution id.
+     * @return void
+     */
+    private static function clear_hold(int $executionid): void {
+        global $DB;
+        $DB->execute(
+            "UPDATE {local_coursetransfermanager_executions} SET errorcode = NULL, errormessage = NULL
+              WHERE id = :id AND " . $DB->sql_like('errorcode', ':prefix'),
+            ['id' => $executionid, 'prefix' => $DB->sql_like_escape(self::HOLD_CODE_PREFIX) . '%']
+        );
+    }
+
+    /**
+     * The rule that last held a pending deletion and why, as recorded on its execution.
+     *
+     * @param stdClass $execution Execution row with errorcode and errormessage.
+     * @return stdClass|null {rule, reason}, or null when nothing holds it.
+     */
+    public static function hold_of(stdClass $execution): ?stdClass {
+        $code = (string) ($execution->errorcode ?? '');
+        if (str_starts_with($code, self::HOLD_CODE_PREFIX)) {
+            return (object) ['rule' => substr($code, strlen(self::HOLD_CODE_PREFIX)),
+                'reason' => (string) $execution->errormessage];
+        }
+        if ($code === task_manager::WARNING_RELOCATION) {
+            // Without the created category R2 can never pass: the warning is the reason.
+            return (object) ['rule' => 'R2', 'reason' => (string) $execution->errormessage];
+        }
+        return null;
+    }
+
+    /**
+     * Whether a task has deletions in the origin that may still be requested (pending, held or running).
+     *
+     * Its origin and destination are fixed meanwhile: the removal goes to the task's current origin.
+     *
+     * @param int $taskid Task id.
+     * @return int How many.
+     */
+    public static function count_open(int $taskid): int {
+        global $DB;
+        [$insql, $params] = $DB->get_in_or_equal(self::PENDING);
+        return $DB->count_records_select(
+            'local_coursetransfermanager_executions',
+            "taskid = ? AND deletestatus $insql",
+            array_merge([$taskid], $params)
+        );
     }
 
     /**

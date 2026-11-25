@@ -33,13 +33,16 @@ final class task_manager_test extends \advanced_testcase {
      * the origin goes only through the verified, announced deletion.
      */
     public function test_restore_keeps_a_safety_copy(): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/backup/util/includes/backup_includes.php');
         $configuration = task_manager::restore_configuration((object)['restoreuserdata' => 1]);
 
         $this->assertTrue(property_exists($configuration, 'keepsafetycopy'), 'local_coursetransfer lacks keepsafetycopy');
         $this->assertTrue($configuration->keepsafetycopy);
         $this->assertFalse($configuration->originremovecategory);
         $this->assertTrue($configuration->originenrolusers);
-        $this->assertSame(1, $configuration->targettarget);
+        // A new course, so the course settings come too (B1).
+        $this->assertSame(\backup::TARGET_NEW_COURSE, $configuration->targettarget);
     }
 
     /**

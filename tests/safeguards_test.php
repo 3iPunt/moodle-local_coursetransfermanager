@@ -224,6 +224,23 @@ final class safeguards_test extends \advanced_testcase {
     }
 
     /**
+     * R3 — an origin that answers but refuses the account says so, not that it did not answer (CTM-014).
+     */
+    public function test_origin_refusing_the_account_holds_with_the_account_reason(): void {
+        $this->seed();
+        $this->origin_answers([['success' => false, 'errors' => [['code' => '17005', 'msg' => 'User suspended']],
+            'data' => null]]);
+
+        $results = $this->quietly(fn() => deletion_manager::process_due(time()));
+
+        $this->assertSame('held', $results[0]->outcome);
+        $this->assertStringContainsString('17005', $results[0]->detail);
+        $this->assertStringNotContainsString('did not answer', $results[0]->detail);
+        $this->assertStringContainsString('refuses the account', $results[0]->detail);
+        $this->assertSame(0, $this->removals());
+    }
+
+    /**
      * R3 can be turned off by the admin: the origin is then not asked.
      */
     public function test_r3_can_be_turned_off(): void {
@@ -512,7 +529,7 @@ final class safeguards_test extends \advanced_testcase {
         $events = array_values(array_filter($sink->get_events(), fn($e) => $e instanceof event\lifecycle_event));
         $this->assertInstanceOf(event\deletion_requested::class, $events[0]);
         $this->assertInstanceOf(event\deletion_executed::class, $events[1]);
-        $this->assertSame('R1+R2+R2v+R3', $events[1]->other['rule']);
+        $this->assertSame('R1+R2+site+R2u+R3+R2v', $events[1]->other['rule']);
         $this->assertEquals($seed->task->usercreated, $events[1]->relateduserid);
     }
 }

@@ -25,7 +25,6 @@
 
 namespace local_coursetransfermanager\manager;
 
-
 use coding_exception;
 use core\lock\lock;
 use core\lock\lock_config;
@@ -233,6 +232,7 @@ class task_manager {
      * @param array $data Form data.
      * @return bool
      * @throws dml_exception
+     * @throws moodle_exception When the origin changes while deletions in the old one are pending.
      */
     public function update_task(int $id, array $data): bool {
         global $DB, $USER;
@@ -240,8 +240,14 @@ class task_manager {
         $record = $DB->get_record('local_coursetransfermanager_tasks', ['id' => $id], '*', MUST_EXIST);
         $cronexpression = trim($data['cronexpression'] ?? $record->cronexpression);
 
+        $originsiteid = (int)($data['originsiteid'] ?? $record->originsiteid);
+        $open = deletion_manager::count_open($id);
+        if ($originsiteid !== (int)$record->originsiteid && $open > 0) {
+            // Its pending deletions would be requested to the new platform with the ids of the old one (B3).
+            throw new moodle_exception('task_origin_locked', 'local_coursetransfermanager', '', $open);
+        }
         $record->name = $data['name'];
-        $record->originsiteid = (int)($data['originsiteid'] ?? $record->originsiteid);
+        $record->originsiteid = $originsiteid;
         $record->categorypattern = $data['categorypattern'];
         $record->targetcategoryid = (int)$data['targetcategoryid'];
         $record->cronexpression = $cronexpression;
@@ -392,10 +398,11 @@ class task_manager {
             $this->advance_schedule($task, $now, $summary->remaining > 0 ? $now + self::RETRY_DELAY : null);
         } catch (Throwable $e) {
             $origin = $e instanceof moodle_exception && in_array($e->errorcode, ['originsyncfailed', 'originunreadable'], true);
+            $account = $e instanceof moodle_exception && $e->errorcode === 'originaccountunusable';
             $error = $e->getMessage();
             $this->create_execution($task->id, self::STATUS_ERROR, [
                 'error' => $error,
-                'errorcode' => $origin ? self::ERROR_ORIGIN : null,
+                'errorcode' => $origin ? self::ERROR_ORIGIN : ($account ? self::ERROR_CREATOR : null),
             ]);
             // An origin that does not answer is usually transient: retry a few times within the cycle.
             $retryat = ($origin && $this->origin_failures($task, $now) <= self::ORIGIN_MAX_RETRIES)
@@ -525,7 +532,14 @@ class task_manager {
                 return $result;
             }
 
-            $summary = $this->process_task($task, $USER, true);
+            // The progress lines of process_task() (mtrace) are meant for the cron log: on this web request they
+            // would go before the JSON of the answer and the browser could not read it (CTM-015).
+            ob_start();
+            try {
+                $summary = $this->process_task($task, $USER, true);
+            } finally {
+                ob_end_clean();
+            }
             $result->succeeded = $summary->succeeded;
             $result->failed = $summary->failed;
             $result->launched = $summary->succeeded > 0;
@@ -537,9 +551,10 @@ class task_manager {
             return $result;
         } catch (Throwable $e) {
             $origin = $e instanceof moodle_exception && in_array($e->errorcode, ['originsyncfailed', 'originunreadable'], true);
+            $account = $e instanceof moodle_exception && $e->errorcode === 'originaccountunusable';
             $this->create_execution($task->id, self::STATUS_ERROR, [
                 'error' => $e->getMessage(),
-                'errorcode' => $origin ? self::ERROR_ORIGIN : null,
+                'errorcode' => $origin ? self::ERROR_ORIGIN : ($account ? self::ERROR_CREATOR : null),
                 'manualrun' => 1,
             ]);
             notifier::execution_error($task, $e->getMessage());
@@ -745,8 +760,13 @@ class task_manager {
      * @return configuration_category
      */
     public static function restore_configuration(object $task): configuration_category {
+        global $CFG;
+        require_once($CFG->dirroot . '/backup/util/includes/backup_includes.php');
+        // A new course: only then the restore brings the course settings too (summary, image, format, dates,
+        // idnumber, custom fields, completion). TARGET_CURRENT_ADDING (1) left them behind and, once the
+        // origin is deleted, they were lost (B1).
         return new configuration_category(
-            1,
+            \backup::TARGET_NEW_COURSE,
             false,
             false,
             !empty($task->restoreuserdata),
@@ -967,6 +987,12 @@ class task_manager {
 
         $detail = origin::format_errors($response->errors ?? []);
         mtrace('Origin sync verification failed: ' . $detail);
+        $codes = array_map(static fn($error): string => (string) ($error->code ?? ''), (array) ($response->errors ?? []));
+        if (array_intersect($codes, ['17002', '17004', '17005'])) {
+            // The origin answers but refuses this account (not found, duplicated, suspended): not transient,
+            // retrying would only repeat the error; the account has to be fixed in the origin (A4).
+            throw new moodle_exception('originaccountunusable', 'local_coursetransfermanager', '', $detail);
+        }
         // The cause goes in $a: debuginfo is dropped from the message in production.
         throw new moodle_exception('originsyncfailed', 'local_coursetransfermanager', '', $detail);
     }

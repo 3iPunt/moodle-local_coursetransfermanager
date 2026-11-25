@@ -299,6 +299,10 @@ class executions_page implements renderable, templatable {
                 ),
                 'urgent' => $urgent && $item->type === agenda::TYPE_DELETION,
                 'awaiting' => ($item->deletestatus ?? '') === deletion_manager::STATUS_AWAITING_APPROVAL,
+                // Held by a safety rule: why, and the way out (A2).
+                'held' => !empty($item->hold),
+                'heldrule' => !empty($item->hold) ? $item->hold->rule : '',
+                'heldreason' => !empty($item->hold) ? $item->hold->reason : '',
                 'approveurl' => !empty($item->executionid)
                     ? (new moodle_url('/local/coursetransfermanager/approve.php', ['id' => $item->executionid]))->out(false)
                     : null,
@@ -334,7 +338,12 @@ class executions_page implements renderable, templatable {
         $exported['requesturl'] = !empty($row->requestid)
             ? (new moodle_url('/local/coursetransfer/log.php', ['id' => (int)$row->requestid]))->out(false)
             : null;
-        if (!empty($row->errormessage) || !empty($row->errorcode)) {
+        $hold = deletion_manager::hold_of($row);
+        if ($hold !== null) {
+            // A held deletion is not a failed run: its rule and reason, as in the deletion card.
+            $exported['error'] = s($hold->reason);
+            $exported['errortitle'] = get_string('deletion_held_title', 'local_coursetransfermanager', $hold->rule);
+        } else if (!empty($row->errormessage) || !empty($row->errorcode)) {
             $exported['error'] = s(trim(($row->errorcode ?? '') . ' ' . ($row->errormessage ?? '')));
         }
         return $exported;

@@ -53,9 +53,9 @@ definitions:
           - composer create-project -n --no-dev --prefer-dist moodlehq/moodle-plugin-ci ci ^4
           - export PATH="/opt/ci-workspace/ci/bin:/opt/ci-workspace/ci/vendor/bin:$PATH"
           # CourseTransfer Manager builds on CourseTransfer: its dependency has
-          # to be in the tree or the plugin will not even install. Pinned to the
-          # 2.2.0 release branch until UNIMOODLE tags v2.2.0; then pin the tag again.
-          - moodle-plugin-ci add-plugin --branch release/2.2.0 UNIMOODLE/moodle-local_coursetransfer
+          # to be in the tree or the plugin will not even install. Pinned to a
+          # release tag, so upstream commits cannot turn it red.
+          - moodle-plugin-ci add-plugin --branch v2.2.1 UNIMOODLE/moodle-local_coursetransfer
           - moodle-plugin-ci install --plugin ./plugin --db-host=127.0.0.1
           - moodle-plugin-ci phplint
           - moodle-plugin-ci phpcs --max-warnings 0

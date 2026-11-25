@@ -33,4 +33,10 @@ $observers = [
         'callback' => '\local_coursetransfermanager\observer::request_completed',
         'internal' => false,
     ],
+    // A request deleted from the CourseTransfer history: an execution waiting for it fails with the reason.
+    [
+        'eventname' => '\local_coursetransfer\event\request_deleted',
+        'callback' => '\local_coursetransfermanager\observer::request_deleted',
+        'internal' => false,
+    ],
 ];

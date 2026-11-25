@@ -126,6 +126,7 @@ final class agenda {
                 'categoryname' => (string) $deletion->origincategoryname,
                 'categoryidnumber' => (string) $deletion->origincategoryidnumber,
                 'deletestatus' => $deletion->deletestatus,
+                'hold' => deletion_manager::hold_of($deletion),
             ];
         }
         return $items;

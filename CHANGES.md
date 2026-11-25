@@ -2,6 +2,60 @@
 
 All notable changes to this plugin. Versions follow [semantic versioning](https://semver.org).
 
+## 2.2.3 — 2026-11-25 (`2026112401`)
+
+Maintenance release. Supported: Moodle 4.5, 5.1 and 5.3. Requires **Course Transfer 2.2.1**
+(`local_coursetransfer` ≥ `2026112002`) on this platform; **2.2.3 is recommended**.
+
+### Fixed
+
+- An execution whose Course Transfer request is deleted while in progress fails with the reason, and the
+  removal of the origin it scheduled is cancelled, instead of waiting forever.
+- «Run now» no longer shows «SyntaxError … is not valid JSON» when the task runs fine: the
+  progress lines meant for the cron log no longer reach the answer.
+- A deletion held because the origin refuses the account used for the check says so, instead
+  of saying that the origin did not answer.
+- A held deletion is shown in the executions log with its rule and reason, not as a failed run,
+  and a candidate excluded by a person while the cron prunes is no longer reported as invalid.
+
+## 2.2.2 — 2026-11-23 (`2026112300`)
+
+Data-safety release. Supported: Moodle 4.5, 5.1 and 5.3. Requires **Course Transfer 2.2.1**
+(`local_coursetransfer` ≥ `2026112002`) on this platform; **2.2.2 is recommended**, and the origin
+platforms should be upgraded to 2.2.1 or later first.
+
+### Fixed
+
+- Archived courses keep their course settings (summary, image, format, dates, idnumber, custom
+  fields, completion): categories are now restored as new courses.
+- A deletion is only requested to the platform the copy came from; the origin of a task cannot be
+  changed while it has deletions pending.
+- A deletion is held when the task asked for user data and the copy arrived without it (or
+  anonymised), or when the origin reports content of the category that the task creator cannot see
+  there (it was not copied, and the deletion in the origin is recursive).
+- The checks before a deletion run in a safer order (creator, origin unchanged, then the restore
+  manifest), so an unreachable origin or an unusable account no longer leaves a deletion held for
+  good. The simulation writes nothing: courses not verified yet are shown as pending.
+- A pruning candidate excluded while the cron prunes others is no longer deleted.
+- An archive that failed before creating anything is tried again on the next run.
+- An origin that refuses the creator's account (not found, duplicated, suspended) is reported as
+  an account to fix, not as an unreachable origin retried several times.
+
+### Changed
+
+- A held deletion shows its rule and reason in the tracking screen, and the held notice explains
+  the ways out (fix the cause and wait for the next check, or cancel and delete by hand).
+- The "deletion executed" notice now says the deletion was requested to the origin and accepted;
+  it runs there in the background.
+
+### Upgrade notes
+
+- After upgrading Course Transfer to 2.2.x, deletions of archives made with older versions may be
+  held by its stricter checks (for example, a backup without its manifest). Review them in the
+  tracking screen: cancel and delete by hand after checking the copy, or archive again.
+- With Course Transfer `transferlogs` on (default), backups with user data include the logs and
+  can be larger.
+
 ## 2.2.0 — 2026-11-20 (`2026112001`)
 
 Safeguards release: nothing is deleted from the origin unless the archived copy

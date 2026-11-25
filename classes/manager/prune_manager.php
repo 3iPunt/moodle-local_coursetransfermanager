@@ -57,6 +57,9 @@ final class prune_manager {
     /** @var string The category was pruned (or no longer existed). */
     public const STATUS_DONE = 'done';
 
+    /** @var string Claimed by the cron right before deleting: no longer excludable (B4). */
+    public const STATUS_RUNNING = 'running';
+
     /**
      * Phase 1: announce new pruning candidates with a grace period.
      *
@@ -118,7 +121,7 @@ final class prune_manager {
      * changed during the grace period (see {@see rotation::is_prunable()}).
      *
      * @param int $now Current timestamp.
-     * @return stdClass[] Results: {candidate, outcome: done|missing|invalid|retry, detail}.
+     * @return stdClass[] Results: {candidate, outcome: done|missing|invalid|excluded|retry, detail}.
      */
     public static function execute_due(int $now): array {
         global $DB;
@@ -154,6 +157,12 @@ final class prune_manager {
                 continue;
             }
 
+            // Claimed with a conditional update: an exclusion made while the cron prunes the previous ones wins (B4).
+            if (!self::claim((int) $candidate->id)) {
+                // Excluded by a person meanwhile: that is the expected outcome, not an error to report.
+                $results[] = (object) ['candidate' => $candidate, 'outcome' => self::STATUS_EXCLUDED, 'detail' => ''];
+                continue;
+            }
             try {
                 mtrace('Pruning archived category id=' . $category->id . ' "' . $candidate->categoryname . '"');
                 $category->delete_full(false);
@@ -161,7 +170,8 @@ final class prune_manager {
                 prune_executed::log((int) $candidate->id, (string) $candidate->categoryname, 'policy+revalidation');
                 $results[] = (object) ['candidate' => $candidate, 'outcome' => self::STATUS_DONE, 'detail' => ''];
             } catch (\Throwable $e) {
-                // Leave it announced so the next tick retries.
+                // Back to announced so the next tick retries (and it can still be excluded meanwhile).
+                self::mark($candidate->id, self::STATUS_ANNOUNCED);
                 mtrace('Pruning failed for category id=' . $candidate->categoryid . ': ' . $e->getMessage());
                 $results[] = (object) ['candidate' => $candidate, 'outcome' => 'retry', 'detail' => $e->getMessage()];
             }
@@ -196,6 +206,25 @@ final class prune_manager {
             ]);
         }
         return count($due);
+    }
+
+    /**
+     * Take an announced candidate for pruning, unless it was excluded or taken meanwhile (B4).
+     *
+     * @param int $pruneid
+     * @return bool True when this run took it.
+     */
+    public static function claim(int $pruneid): bool {
+        global $DB;
+        if ($DB->get_field('local_coursetransfermanager_prune', 'status', ['id' => $pruneid]) !== self::STATUS_ANNOUNCED) {
+            return false;
+        }
+        $DB->execute(
+            "UPDATE {local_coursetransfermanager_prune} SET status = :running, timemodified = :now
+              WHERE id = :id AND status = :announced",
+            ['running' => self::STATUS_RUNNING, 'now' => time(), 'id' => $pruneid, 'announced' => self::STATUS_ANNOUNCED]
+        );
+        return $DB->get_field('local_coursetransfermanager_prune', 'status', ['id' => $pruneid]) === self::STATUS_RUNNING;
     }
 
     /**
@@ -266,11 +295,12 @@ final class prune_manager {
      */
     private static function mark(int $pruneid, string $status): void {
         global $DB;
-        // Only from announced: never overwrite an exclusion made in the meantime.
+        // Only from announced or claimed: never overwrite an exclusion made in the meantime.
         $DB->execute(
             "UPDATE {local_coursetransfermanager_prune} SET status = :status, timemodified = :now
-              WHERE id = :id AND status = :announced",
-            ['status' => $status, 'now' => time(), 'id' => $pruneid, 'announced' => self::STATUS_ANNOUNCED]
+              WHERE id = :id AND status IN (:announced, :running)",
+            ['status' => $status, 'now' => time(), 'id' => $pruneid, 'announced' => self::STATUS_ANNOUNCED,
+                'running' => self::STATUS_RUNNING]
         );
     }
 }

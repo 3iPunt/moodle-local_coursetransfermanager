@@ -169,4 +169,49 @@ final class notifier_test extends \advanced_testcase {
             $DB->get_field('local_coursetransfermanager_executions', 'status', ['id' => $executionid])
         );
     }
+
+    /**
+     * A launched execution whose request is deleted fails with the reason and its origin removal is cancelled.
+     */
+    public function test_observer_request_deleted_fails_the_execution(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $seed = $this->seed();
+        $admin = get_admin();
+        $executionid = $DB->insert_record('local_coursetransfermanager_executions', (object)[
+            'taskid' => $seed->task->id, 'status' => task_manager::STATUS_SUCCESS,
+            'manualrun' => 0, 'requestid' => 515151,
+            'origincategoryname' => 'Curs 2025-2026',
+            'scheduleddeleteat' => time() + 30 * DAYSECS, 'deletestatus' => 'scheduled',
+            'timecreated' => time(), 'timemodified' => time(),
+        ]);
+
+        $event = \local_coursetransfer\event\request_deleted::create([
+            'objectid' => 515151,
+            'userid' => $admin->id,
+            'context' => \context_system::instance(),
+            'other' => ['type' => 1, 'direction' => 0, 'status' => 10],
+        ]);
+        observer::request_deleted($event);
+
+        $execution = $DB->get_record('local_coursetransfermanager_executions', ['id' => $executionid]);
+        $this->assertSame(task_manager::STATUS_ERROR, $execution->status);
+        $this->assertStringContainsString('515151', $execution->errormessage);
+        $this->assertSame('cancelled', $execution->deletestatus);
+        $this->assertEquals($admin->id, $execution->deletecancelledby);
+
+        // A completed execution is left as it is: its removal is held by its own checks.
+        $doneid = $DB->insert_record('local_coursetransfermanager_executions', (object)[
+            'taskid' => $seed->task->id, 'status' => task_manager::STATUS_COMPLETED,
+            'manualrun' => 0, 'requestid' => 616161, 'origincategoryname' => 'Curs 2024-2025',
+            'timecreated' => time(), 'timemodified' => time(),
+        ]);
+        observer::request_deleted(\local_coursetransfer\event\request_deleted::create([
+            'objectid' => 616161, 'context' => \context_system::instance(),
+            'other' => ['type' => 1, 'direction' => 0, 'status' => 100],
+        ]));
+        $status = $DB->get_field('local_coursetransfermanager_executions', 'status', ['id' => $doneid]);
+        $this->assertSame(task_manager::STATUS_COMPLETED, $status);
+    }
 }

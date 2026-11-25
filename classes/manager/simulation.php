@@ -107,9 +107,12 @@ final class simulation {
     private static function deletions(stdClass $task, int $now): array {
         $rows = [];
         foreach (deletion_manager::get_checkable((int) $task->id) as $execution) {
-            $check = deletion_manager::check($execution);
+            // Read only: manifests not verified yet are reported as pending, not checked (that would write).
+            $check = deletion_manager::check($execution, true);
             if ($check->rule !== null) {
                 $status = 'held';
+            } else if ($check->pending !== null) {
+                $status = 'pending';
             } else if ($execution->deletestatus === deletion_manager::STATUS_AWAITING_APPROVAL || $check->needsapproval) {
                 $status = 'approval';
             } else {
@@ -120,7 +123,7 @@ final class simulation {
                 'date' => (int) $execution->scheduleddeleteat,
                 'status' => $status,
                 'rule' => (string) $check->rule,
-                'reason' => (string) $check->reason,
+                'reason' => (string) ($check->reason ?? $check->pending),
                 'passed' => $check->passed,
                 'notes' => $check->notes,
             ];
